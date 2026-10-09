@@ -130,7 +130,7 @@ def _loop(state, verdicts):
         try:
             msg = llm.chat(state.messages, TOOL_SPECS)
         except Exception as e:                                     # fail closed, never crash the UI
-            audit(state, "llm_error", error=type(e).__name__)
+            audit(state, "llm_error", error=type(e).__name__, detail=llm.describe(e))
             return _done(state, UNAVAILABLE, verdicts)
         if not msg.tool_calls:
             return _finish(state, msg.content or "", verdicts)

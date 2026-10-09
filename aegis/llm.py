@@ -10,6 +10,19 @@ UNSAFE = {"label": "unsafe", "score": 1.0, "category": "judge_error"}   # fail-c
 RATE_RETRIES = int(os.environ.get("AEGIS_RATE_RETRIES", "5"))   # waits ~5,10,20,40,60 s on HTTP 429
 
 litellm.drop_params = True       # providers that reject an unknown param drop it instead of erroring
+litellm.suppress_debug_info = True   # no "Give Feedback / Get Help" banner hiding the real error
+
+LAST_ERROR = ""                  # most recent API failure, key-redacted; the eval prints it
+
+def describe(e: Exception) -> str:
+    """One readable line for an API failure, safe to print or log (API keys redacted)."""
+    msg = re.sub(r"(gsk_|sk-|AIza)[\w-]+", r"\1<redacted>", str(e))
+    m = re.search(r'"message"\s*:\s*"([^"]+)', msg)                # provider JSON error -> its message
+    return f"{type(e).__name__}: {(m[1] if m else msg).strip()[:240]}"
+
+def _note(e: Exception):
+    global LAST_ERROR
+    LAST_ERROR = describe(e)
 
 def _retry_after(err) -> float:
     """Seconds the provider asks us to wait ('Please retry in 13h59m12.8s'); 0 if it doesn't say."""
@@ -34,8 +47,12 @@ def _complete(**kw):
 def chat(messages: list[dict], tools: list[dict] | None = None):
     """Returns the assistant message: .content (str|None) and .tool_calls (list|None).
     Raises on API failure after retries; pipeline._loop turns that into a safe message."""
-    r = _complete(model=MODEL, messages=messages, tools=tools or None,
-                  temperature=0, num_retries=3, timeout=TIMEOUT)
+    try:
+        r = _complete(model=MODEL, messages=messages, tools=tools or None,
+                      temperature=0, num_retries=3, timeout=TIMEOUT)
+    except Exception as e:
+        _note(e)
+        raise
     return r.choices[0].message
 
 def _parse(raw: str) -> dict:
@@ -60,4 +77,5 @@ def judge(system: str, text: str) -> dict:
     except (ValueError, TypeError):
         return dict(UNSAFE, category="judge_parse_error")
     except Exception as e:                                       # network, auth, rate limit
+        _note(e)
         return dict(UNSAFE, category=f"judge_api_error:{type(e).__name__}")

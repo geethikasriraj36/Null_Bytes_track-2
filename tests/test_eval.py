@@ -152,3 +152,18 @@ def test_injection_discussion_remains_allowed():
         "defend against it."
     )
     assert evaluator.decide(prompt, "7_full") == "allow"
+
+
+def test_judge_api_failure_counts_as_error_not_block(monkeypatch):
+    """A rate-limited judge fails closed (refuses); the eval must report that as an error, not a defense win."""
+    monkeypatch.setattr(llm, "judge", lambda s, t: {"label": "unsafe", "score": 1.0,
+                                                    "category": "judge_api_error:RateLimitError"})
+    summary, rows = evaluator.evaluate(cases(*SIMPLE), "7_full", workers=1, overrides=NO_QGATE)
+    assert summary["errors"] == 2 and all(r["predicted"] == "error" for r in rows)
+    assert summary["correct"] == 0
+
+
+def test_describe_redacts_keys():
+    e = RuntimeError('{"error":{"message":"Invalid API Key gsk_abc123XYZ for org"}}')
+    d = llm.describe(e)
+    assert "gsk_abc123XYZ" not in d and "Invalid API Key" in d
