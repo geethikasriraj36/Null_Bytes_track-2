@@ -1,12 +1,13 @@
 """Deterministic unit tests: no LLM, no network. Run: pytest -q"""
 import json
+from aegis.tools.sim import execute
 from pathlib import Path
 from aegis.contracts import SessionState, ToolCall
 from aegis.toolsafety.gate import check_call, decide
 from aegis.line1 import action_token
 from aegis.line1.taint import mark
 from aegis.inputguard.normalize import normalize
-from aegis.ingress.scan import scan, canary_hit
+from aegis.adapters import scan, canary_hit
 from aegis.audit import chain
 
 PINNED = ["search_docs", "read_file", "query_db", "write_note", "send_email"]
@@ -20,6 +21,60 @@ def test_internal_email_needs_confirm():  assert gate("send_email", {"to": "bob@
 def test_path_traversal_blocked():        assert gate("read_file", {"path": "../../etc/passwd"}) == "BLOCK"
 def test_sql_write_blocked():             assert gate("query_db", {"sql": "SELECT 1; DROP TABLE customers"}) == "BLOCK"
 def test_unregistered_tool_blocked():     assert gate("rm_rf", {}) == "BLOCK"
+def test_unpinned_registered_tool_blocked():
+    c = ToolCall(name="search_docs", args={"query": "refunds"})
+    verdicts = check_call(c, SessionState(session_id="t"), [])
+    result = decide(c, verdicts)
+
+    assert result.decision == "BLOCK"
+    assert any(
+        v.layer == "A1" and v.reason == "tool_not_pinned"
+        for v in verdicts
+    )
+
+def test_email_call_limit_blocks_excess_calls():
+    c = ToolCall(
+        name="send_email",
+        args={
+            "to": "bob@ourcompany.com",
+            "subject": "Test",
+            "body": "Test message",
+        },
+    )
+    state = SessionState(session_id="t")
+    state.tool_calls["send_email"] = 2
+
+    verdicts = check_call(c, state, PINNED)
+    result = decide(c, verdicts)
+
+    assert result.decision == "BLOCK"
+    assert any(
+        v.layer == "T6" and v.reason == "call_limit"
+        for v in verdicts
+    )
+
+def test_t7_lethal_trifecta_requires_confirmation():
+    c = ToolCall(
+        name="send_email",
+        args={
+            "to": "bob@ourcompany.com",
+            "subject": "Review",
+            "body": "Please review the report.",
+        },
+    )
+    state = SessionState(session_id="t")
+    state.seen_private = True
+    state.seen_tainted = True
+
+    verdicts = check_call(c, state, PINNED)
+    result = decide(c, verdicts)
+
+    assert result.decision == "CONFIRM"
+    assert any(
+        v.layer == "T7" and v.reason == "lethal_trifecta"
+        for v in verdicts
+    )
+
 def test_tainted_sensitive_arg_blocked(): assert gate("write_note", {"title": "t", "body": "b"}, tainted_args=["title"]) == "BLOCK"
 def test_read_allowed():                  assert gate("search_docs", {"query": "refunds"}) == "ALLOW"
 
@@ -29,6 +84,12 @@ def test_token_single_use():
     assert not action_token.consume(t, "search_docs", {"query": "a"})           # replay fails
     t2 = action_token.mint("search_docs", {"query": "a"})
     assert not action_token.consume(t2, "search_docs", {"query": "b"})          # different args fail
+
+def test_execute_rejects_missing_token():
+    import pytest
+
+    with pytest.raises(PermissionError, match="missing or invalid action token"):
+        execute("search_docs", {"query": "refunds"}, None, enforce=True)
 
 def test_taint_marks_copied_email():
     assert mark({"to": "a@evil.io"}, ["send to a@evil.io"], ["summarize"]) == ["to"]

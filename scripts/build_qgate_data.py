@@ -7,8 +7,9 @@ from datasets import load_dataset          # pip install datasets
 ds = load_dataset("deepset/prompt-injections")
 def rows(split):
     return [{"text": r["text"], "label": int(r["label"])} for r in ds[split]]
-own = [{"text": p.strip(), "label": 0} for f in Path("data/docs").glob("*.md")
-       for p in f.read_text().split("\n\n") if len(p.strip()) > 20 and "AI ASSISTANT" not in p]
+# our clean docs as benign rows; demo_*.md is the poisoned demo doc and must never be labelled benign
+own = [{"text": p.strip(), "label": 0} for f in Path("data/docs").glob("*.md") if not f.name.startswith("demo_")
+       for p in f.read_text(encoding="utf-8").split("\n\n") if len(p.strip()) > 20 and "ai assistant" not in p.lower()]
 train, test = rows("train") + own, rows("test")
 random.Random(0).shuffle(train)
 for name, data in [("qgate_train", train), ("qgate_test", test)]:

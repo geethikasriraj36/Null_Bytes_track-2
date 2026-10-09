@@ -1,45 +1,162 @@
-"""D2: secret + PII scan and redaction. D3 canary check. Used on ingress and egress."""
-import math, re
-CANARIES = ["AEGIS-CANARY-7f3a9c", "sk-canary-0000DEADBEEF"]   # also planted in the system prompt and secret store
 
-PATTERNS = {
-    "AWS_KEY": r"\bAKIA[0-9A-Z]{16}\b",
-    "API_KEY": r"\b(?:sk|pk|api|key)[-_][A-Za-z0-9_-]{16,}\b",
-    "JWT": r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b",
-    "PRIVATE_KEY": r"-----BEGIN [A-Z ]*PRIVATE KEY-----",
-    "EMAIL": r"\b[\w.+-]+@[\w-]+\.[\w.]+\b",
-    "PHONE": r"(?<!\d)(?:\+?\d{1,3}[ -]?)?\d{10}(?!\d)",
-    "CARD": r"\b\d(?:[ -]?\d){12,15}\b",
-    "AADHAAR": r"\b\d{4}\s\d{4}\s\d{4}\b",
+import re
+import math
+from collections import Counter
+from typing import Iterable
+
+
+# Demo canaries: use synthetic values only, never real credentials.
+CANARIES = {
+    "AEGIS_CANARY_7F3A91",
+    "AEGIS_SECRET_CANARY_C92D14",
 }
 
-def _luhn(num: str) -> bool:
-    d = [int(c) for c in re.sub(r"\D", "", num)][::-1]
-    return len(d) >= 13 and sum(x if i % 2 == 0 else (x * 2 - 9 if x * 2 > 9 else x * 2) for i, x in enumerate(d)) % 10 == 0
 
-def _entropy(s: str) -> float:
-    return -sum(s.count(c) / len(s) * math.log2(s.count(c) / len(s)) for c in set(s))
+PATTERNS = {
+    "email": re.compile(
+        r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"
+    ),
+    "phone": re.compile(
+        r"(?<!\w)(?:\+?\d{1,3}[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)\d{3}[-.\s]?\d{4}(?!\w)"
+    ),
+    "aws_access_key": re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
+    "generic_secret": re.compile(
+        r"(?i)\b(?:api[_-]?key|access[_-]?token|secret|password)"
+        r"\s*[:=]\s*['\"]?[A-Za-z0-9_\-./+=]{8,}['\"]?"
+    ),
+    "ipv4": re.compile(
+        r"\b(?:\d{1,3}\.){3}\d{1,3}\b"
+    ),
+}
 
-def scan(text: str, redact_emails: bool = False) -> tuple[str, list[str]]:
-    """Returns (redacted_text, list_of_finding_types)."""
-    found = []
-    for kind, pat in PATTERNS.items():
-        if kind == "EMAIL" and not redact_emails:
-            continue
-        def sub(m, kind=kind):
-            if kind == "CARD" and not _luhn(m.group(0)):
-                return m.group(0)
-            found.append(kind)
-            return f"[REDACTED:{kind}]"
-        text = re.sub(pat, sub, text)
-    # high-entropy tokens (unknown key formats)
-    def ent(m):
-        tok = m.group(0)
-        if _entropy(tok) > 4.0 and any(c.isdigit() for c in tok) and any(c.isalpha() for c in tok):
-            found.append("HIGH_ENTROPY"); return "[REDACTED:SECRET]"
-        return tok
-    text = re.sub(r"\b[A-Za-z0-9+/_-]{24,}\b", ent, text)
-    return text, found
 
-def canary_hit(text: str) -> bool:
-    return any(c in text for c in CANARIES)
+def _entropy(value: str) -> float:
+    """Shannon character entropy; useful as one secret-detection signal."""
+    if not value:
+        return 0.0
+
+    counts = Counter(value)
+    length = len(value)
+
+    return -sum(
+        (count / length) * math.log2(count / length)
+        for count in counts.values()
+    )
+
+
+def _luhn_valid(value: str) -> bool:
+    """Return True if a digit string passes the Luhn checksum."""
+    digits = [int(char) for char in value if char.isdigit()]
+
+    if not 13 <= len(digits) <= 19:
+        return False
+
+    total = 0
+    parity = len(digits) % 2
+
+    for index, digit in enumerate(digits):
+        if index % 2 == parity:
+            digit *= 2
+            if digit > 9:
+                digit -= 9
+        total += digit
+
+    return total % 10 == 0
+
+
+def scan(text: str) -> dict:
+    """
+    Scan text for known secret/PII patterns.
+
+    Returns:
+        {
+            "matches": [{"type": ..., "value": ..., "start": ..., "end": ...}],
+            "canary_hits": [...]
+        }
+    """
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+
+    matches = []
+
+    for category, pattern in PATTERNS.items():
+        for match in pattern.finditer(text):
+            matches.append({
+                "type": category,
+                "value": match.group(0),
+                "start": match.start(),
+                "end": match.end(),
+            })
+
+    # Credit-card-like digit sequences: require a valid Luhn checksum.
+    for match in re.finditer(r"(?<!\d)(?:\d[ -]?){13,19}(?!\d)", text):
+        candidate = match.group(0)
+
+        if _luhn_valid(candidate):
+            matches.append({
+                "type": "payment_card",
+                "value": candidate,
+                "start": match.start(),
+                "end": match.end(),
+            })
+
+    # High-entropy tokens are only flagged when they are sufficiently long
+    # and contain mixed character classes, reducing indiscriminate matches.
+    for match in re.finditer(r"\b[A-Za-z0-9_+/=-]{20,}\b", text):
+        token = match.group(0)
+
+        has_letters = bool(re.search(r"[A-Za-z]", token))
+        has_digits = bool(re.search(r"\d", token))
+
+        if has_letters and has_digits and _entropy(token) >= 3.5:
+            matches.append({
+                "type": "high_entropy_token",
+                "value": token,
+                "start": match.start(),
+                "end": match.end(),
+            })
+
+    # Remove exact duplicate spans/categories, then order by text position.
+    unique = {
+        (item["type"], item["start"], item["end"]): item
+        for item in matches
+    }
+
+    return {
+        "matches": sorted(
+            unique.values(),
+            key=lambda item: (item["start"], item["end"]),
+        ),
+        "canary_hits": canary_hit(text),
+    }
+
+
+def canary_hit(text: str) -> list[str]:
+    """Return any known canary tokens found in text."""
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+
+    return sorted(token for token in CANARIES if token in text)
+
+
+
+def redact(text: str, replacement: str = "[REDACTED]") -> str:
+    """Redact sensitive values and canary tokens."""
+    matches = scan(text)["matches"]
+    spans = [(m["start"], m["end"]) for m in matches]
+
+    # Include canary tokens in redaction.
+    for token in CANARIES:
+        start = 0
+        while True:
+            start = text.find(token, start)
+            if start == -1:
+                break
+            spans.append((start, start + len(token)))
+            start += len(token)
+
+    # Replace from right to left to preserve character positions.
+    for start, end in sorted(set(spans), reverse=True):
+        text = text[:start] + replacement + text[end:]
+
+    return text

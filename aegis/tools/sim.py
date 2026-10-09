@@ -9,6 +9,9 @@ DOCS, FILES = DATA / "docs", DATA / "files"
 # The eval runner sets a per-case sandbox so cases can run in parallel threads:
 # {"docs": {name: text}, "outbox": [], "executed": []}. None = normal app mode (files on disk).
 CTX: contextvars.ContextVar[dict | None] = contextvars.ContextVar("sim", default=None)
+SESSION_TAINTED: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "session_tainted", default=False
+)
 
 def search_docs(query: str) -> list[dict]:
     """Keyword search over data/docs/*.md. Returns up to 3 {origin, text} chunks."""
@@ -37,8 +40,28 @@ def query_db(sql: str) -> list[dict]:
     return [{"origin": "db", "text": json.dumps(rows)}]
 
 def write_note(title: str, body: str) -> list[dict]:
-    with (DATA / "notes.jsonl").open("a") as f:
-        f.write(json.dumps({"ts": time.time(), "title": title, "body": body}) + "\n")
+    """Save a note together with its trust metadata (A3)."""
+    ctx = CTX.get()
+
+    trust = (
+        "untrusted"
+        if SESSION_TAINTED.get()
+        or (ctx is not None and ctx.get("seen_tainted", False))
+        else "trusted"
+    )
+
+    note = {
+        "ts": time.time(),
+        "title": title,
+        "body": body,
+        "trust": trust,
+    }
+
+    DATA.mkdir(parents=True, exist_ok=True)
+
+    with (DATA / "notes.jsonl").open("a", encoding="utf-8") as f:
+        f.write(json.dumps(note) + "\n")
+
     return [{"origin": "notes", "text": f"Saved note '{title}'."}]
 
 def send_email(to: str, subject: str, body: str) -> list[dict]:
@@ -65,5 +88,6 @@ def execute(name: str, args: dict, token: str | None, enforce: bool = True) -> l
     """Runs a tool. With enforcement on, a valid single-use token is mandatory."""
     if enforce and not action_token.consume(token, name, args):
         raise PermissionError("missing or invalid action token")
-    (CTX.get() or {}).get("executed", EXECUTED).append((name, args))
-    return TOOLS[name](**args)
+    out = TOOLS[name](**args)          # raises if the tool's own sandbox refuses (e.g. path escape)
+    (CTX.get() or {}).get("executed", EXECUTED).append((name, args))   # record only calls that really ran
+    return out
