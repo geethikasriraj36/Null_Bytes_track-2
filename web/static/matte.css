@@ -1,0 +1,33 @@
+/* Matte finish: no glows, halos or drop shadows anywhere; muted accent colours. Loaded last, overrides the rest.
+   Movement animations (spinning atom, Bloch arrows, phase hands, filling bars) are kept; only light effects go. */
+
+/* 1. no shadows or glows of any kind (also wins over keyframes that animate box-shadow) */
+*, *::before, *::after { box-shadow: none !important; text-shadow: none !important; filter: none !important; }
+
+/* 2. muted palette (dark is the default theme) */
+:root[data-theme="dark"] {
+  --wine: #b85c70;       --wine-soft: #2a171c;  --wine-ink: #d9a3af;
+  --amber: #c49a52;      --amber-soft: #2a2212;
+  --sage: #7aa889;       --sage-soft: #16211a;
+  --user: #1f1719;
+  --offset: none;
+}
+:root[data-theme="light"] {
+  --wine: #95384d;       --wine-soft: #f1e3e6;  --wine-ink: #6e2436;
+  --amber: #8a6a2c;      --amber-soft: #f3ebd9;
+  --sage: #4a6e57;       --sage-soft: #e4ebe5;
+  --offset: none;
+}
+
+/* 3. lit-up effects replaced with flat ones */
+.beam { background: var(--wine) !important; height: 2px; opacity: .8; }      /* scanner: flat line, no white-hot core */
+.phase .glow { display: none; }                                               /* no expanding halo rings */
+.qrow.st-caught .qgate { animation: none !important; }                        /* no pulsing halo on CAUGHT */
+.qwave path { opacity: .45 !important; }
+.notice.leak { background: var(--wine-soft); color: var(--wine-ink); border-color: var(--wine); }
+.send { background: var(--wine); }
+.anomaly { background: var(--wine); color: var(--paper); }
+.qrow.st-caught .qgate { color: var(--paper); }
+
+/* hover "lift" effects relied on the shadow; keep elements still instead */
+.new-chat:hover, .starter:hover, .nerd > summary:hover { transform: none !important; }
