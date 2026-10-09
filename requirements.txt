@@ -11,6 +11,7 @@ pyyaml
 pytest
 python-dotenv
 datasets            # only for scripts/build_qgate_data.py
+pyarrow<26          # 26.0.0 DLL is blocked by Windows Smart App Control on some laptops
 # Recommended (install at hour 0 if you plan H3 / better PII):
 # sentence-transformers
 # detect-secrets
