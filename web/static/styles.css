@@ -18,16 +18,16 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) { color-scheme: dark; }
 }
-:root[data-theme="dark"] {
+:root[data-theme="dark"] {          /* default: black background, white ink, wine for danger */
   color-scheme: dark;
-  --paper: #121110;      --paper-2: #1a1917;   --card: #1e1d1a;
-  --ink: #ece6d8;        --ink-2: #b1aa9b;     --ink-3: #7f796d;
-  --rule: #34312c;       --rule-2: #2a2825;
-  --wine: #e05a7c;       --wine-soft: #3a1b23; --wine-ink: #f08aa3;
-  --amber: #e2ab4b;      --amber-soft: #3a2e17;
-  --sage: #7fb894;       --sage-soft: #1f2d24;
-  --user: #2e1d22;
-  --offset: 2px 2px 0 #000;
+  --paper: #0a0a0a;      --paper-2: #111111;   --card: #151515;
+  --ink: #f5f5f3;        --ink-2: #bdbdb8;     --ink-3: #82827d;
+  --rule: #2b2b29;       --rule-2: #1c1c1b;
+  --wine: #e8577c;       --wine-soft: #3b1621; --wine-ink: #ff9bb4;
+  --amber: #f0b44f;      --amber-soft: #33270f;
+  --sage: #7fd39b;       --sage-soft: #13261a;
+  --user: #24161b;
+  --offset: 2px 2px 0 #f5f5f3;
 }
 
 * { box-sizing: border-box; }
@@ -102,7 +102,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   -webkit-mask: url("/static/doodles.svg") 0 0 / 440px 440px repeat; mask: url("/static/doodles.svg") 0 0 / 440px 440px repeat;
   opacity: var(--doodle, .075); }
 .topbar, .composer { position: relative; z-index: 2; }
-:root[data-theme="dark"] { --doodle: .1; }
+:root[data-theme="dark"] { --doodle: .085; }
 .empty { text-align: center; margin-top: 9vh; }
 .empty-logo { font-family: var(--script); font-size: 88px; color: var(--wine); line-height: 1; transform: rotate(-2deg); }
 .motto { font-family: var(--serif); font-size: 21px; color: var(--ink-2); margin: 6px 0 26px; }

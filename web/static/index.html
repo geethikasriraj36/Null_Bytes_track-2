@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&family=Patrick+Hand+SC&family=Cormorant+Garamond:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/thought.css">
 </head>
 <body>
 <div class="app">
@@ -29,7 +30,7 @@
       <button class="side-link" id="openAudit"><span class="ico">⛓</span> Audit log <span class="pill" id="auditPill"></span></button>
       <button class="side-link" id="openResults"><span class="ico">▤</span> Results</button>
       <button class="side-link" id="openComic"><span class="ico">✎</span> How it works</button>
-      <button class="side-link" id="toggleTheme"><span class="ico">◐</span> <span id="themeLabel">Ink mode</span></button>
+      <button class="side-link" id="toggleTheme"><span class="ico">◐</span> <span id="themeLabel">Paper mode</span></button>
       <div class="whoami">
         <div class="avatar">M</div>
         <div><div class="name">Meera · Ops</div><div class="sub" id="modelLine">model</div></div>
@@ -77,6 +78,7 @@
 </div>
 
 <script src="/static/comic.js"></script>
+<script src="/static/explain.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

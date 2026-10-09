@@ -26,7 +26,7 @@ const STARTERS = [
 
 // ------------------------------------------------------------------ boot
 async function boot() {
-  try { const t = localStorage.getItem("aegis-theme"); if (t) setTheme(t); } catch (_) {}
+  try { const t = localStorage.getItem("aegis-theme-v2"); if (t) setTheme(t); } catch (_) {}
   if (/[#&]dark\b/.test(location.hash)) setTheme("dark");
   S.meta = await api("/api/meta");
   S.draftConfig = S.meta.default;
@@ -43,7 +43,9 @@ async function boot() {
   renderPicker();
   refreshAuditPill();
   wire();
-  if (location.hash.includes("nerd")) document.querySelectorAll("details.nerd").forEach((d) => (d.open = true));
+  if (location.hash.includes("nerd")) document.querySelectorAll("details.thought").forEach((d) => (d.open = true));
+  const ex = location.hash.match(/explain=([0-9]+)/);                       // #chat=<id>&explain=<item index>
+  if (ex && S.chat?.items[+ex[1]]) { window.openExplain(S.chat.items[+ex[1]], rawTrace(S.chat.items[+ex[1]]), S.chat.config); $(".drawer-card").classList.add("wide"); }
   if (location.hash.includes("comic")) comic();
 }
 
@@ -58,7 +60,15 @@ function wire() {
   $("#openAudit").onclick = openAudit;
   $("#openResults").onclick = openResults;
   $("#openComic").onclick = comic;
-  $("#chat").addEventListener("click", (e) => { if (e.target.closest("[data-comic]")) { e.preventDefault(); e.stopPropagation(); comic(); } });
+  $("#chat").addEventListener("click", (e) => {
+    if (e.target.closest("[data-comic]")) { e.preventDefault(); e.stopPropagation(); comic(); return; }
+    const ex = e.target.closest("[data-explain]");
+    if (ex) {
+      e.preventDefault();
+      const it = S.chat?.items[+ex.dataset.explain];
+      if (it) { window.openExplain(it, rawTrace(it), S.chat.config); $(".drawer-card").classList.add("wide"); }
+    }
+  });
   $("#closeDrawer").onclick = () => ($("#drawer").hidden = true);
   $("#drawer").onclick = (e) => { if (e.target.id === "drawer") $("#drawer").hidden = true; };
   $("#menuBtn").onclick = () => $("#sidebar").classList.toggle("open");
@@ -67,7 +77,7 @@ function wire() {
 function setTheme(t) {
   document.documentElement.dataset.theme = t;
   $("#themeLabel").textContent = t === "dark" ? "Paper mode" : "Ink mode";
-  try { localStorage.setItem("aegis-theme", t); } catch (_) {}
+  try { localStorage.setItem("aegis-theme-v2", t); } catch (_) {}
 }
 function autosize() { const t = $("#input"); t.style.height = "auto"; t.style.height = Math.min(180, t.scrollHeight) + "px"; }
 
@@ -247,7 +257,7 @@ function approvalCard(it, isLast) {
     <div class="why">Needs your OK: ${esc([...new Set(why)].join(" · ") || "policy")}</div>
     <pre>${esc(JSON.stringify(p.args, null, 2))}</pre>
     <div class="btns"><button class="btn primary" data-approve="1" ${live ? "" : "disabled"}>Allow</button>
-    <button class="btn" data-approve="0" ${live ? "" : "disabled"}>Don't allow</button></div></div></div>` + nerdPanel(it);
+    <button class="btn" data-approve="0" ${live ? "" : "disabled"}>Don't allow</button></div></div></div>` + thoughtPanel(it);
 }
 
 function answerBubble(it) {
@@ -259,7 +269,7 @@ function answerBubble(it) {
   const cls = it.refused || it.unavailable ? "refused" : "";
   const who = it.refused && judgeDown ? `<div class="who">⚠ Safety check couldn't run, so Aegis refused to be safe (see stats)</div>`
     : it.refused ? `<div class="who">🚫 Not answered</div>` : it.unavailable ? `<div class="who">⚠ Unavailable (see stats for the reason)</div>` : "";
-  return `<div class="row"><div class="bubble ${cls}">${who}<div class="md">${text}</div><div class="meta">${clock(it.ts)} ${ticks}</div></div></div>` + nerdPanel(it);
+  return `<div class="row"><div class="bubble ${cls}">${who}<div class="md">${text}</div><div class="meta">${clock(it.ts)} ${ticks}</div></div></div>` + thoughtPanel(it);
 }
 
 /* answers: **bold**, "- " bullets, line breaks, [p_xxxxxxxx] -> source chip, "Heads-up:" lines highlighted */
@@ -285,12 +295,102 @@ const kv = (rows) => `<div class="kv">${rows.filter(Boolean).map(([k, v]) => `<s
 const bar = (x, hot) => `<span class="bar ${hot ? "hot" : ""}" style="width:${Math.round(Math.max(0.02, x) * 70)}px"></span>`;
 const vline = (v) => `${esc(v.layer)} ${D(v.decision)}${v.reason ? ` <span class="mut">${esc(v.reason)}</span>` : ""}${v.score ? ` <span class="mut">${(+v.score).toFixed(2)}</span>` : ""}`;
 
-function nerdPanel(it) {
-  const t = it.trace || {}, vs = it.verdicts || [];
-  const flags = vs.filter((v) => ["flag", "review", "confirm", "strict", "redact", "prune"].includes(v.decision)).length;
-  const blocks = vs.filter((v) => ["block", "refuse", "quarantine", "abstain"].includes(v.decision)).length;
-  const sum = `<summary><span class="lbl">📊 stats for nerds</span> · ${vs.length} checks · <span class="${flags ? "warn" : ""}">${flags} flag${flags === 1 ? "" : "s"}</span> ·
-    <span class="${blocks ? "bad" : ""}">${blocks} block${blocks === 1 ? "" : "s"}</span> · ${((t.total_ms || 0) / 1000).toFixed(1)} s · ${t.llm_calls || 0} LLM calls${t.llm_tokens ? ` · ${t.llm_tokens} tok` : ""}</summary>`;
+// ------------------------------------------------------------------ "Thought for N s": per-layer table
+const LAYERS = [
+  ["J1", "Jailbreak guard", "Is the message trying to break the rules, even in disguise?"],
+  ["J3", "Conversation risk", "Is this chat escalating, turn after turn?"],
+  ["TOOLS", "Tool rules", "Is the tool allowed and are its arguments safe?"],
+  ["A2", "Taint check", "Did a document, not you, supply the target?"],
+  ["D4", "Outbound allowlist", "Is the destination an approved address?"],
+  ["T4", "Human approval", "Is this risky enough to ask you first?"],
+  ["QGATE", "Q-Gate (quantum)", "Does anything it read smell like an injected command?"],
+  ["DATA", "Data protection", "Access rights, secrets and leaked markers"],
+  ["J4", "Output moderation", "Is the answer itself harmful?"],
+  ["H", "Fact check", "Does every sentence point to a real source?"],
+  ["M", "Audit seal", "Is every step sealed in the tamper-evident log?"],
+];
+const ST = { caught: ["⛔", "caught"], flag: ["⚠", "flagged"], pass: ["✓", "clear"], idle: ["–", "not needed"], off: ["○", "off"] };
+
+function layerRows(it) {
+  const t = it.trace || {}, f = t.flags || {}, steps = t.steps || [];
+  const get = (st) => steps.filter((s) => s.stage === st);
+  const input = get("input")[0], gates = get("gate"), content = get("content"), output = get("output")[0];
+  const gv = gates.flatMap((g) => g.verdicts.map((v) => ({ ...v, g })));
+  const blk = (layers) => gv.filter((v) => layers.includes(v.layer) && v.decision === "block");
+  const tools = [...new Set(gates.map((g) => g.tool))].join(", ");
+  const R = {};
+  // J1 / J3
+  if (!f.J || !input || input.skipped) { R.J1 = ["off"]; R.J3 = ["off"]; }
+  else {
+    const j1 = input.j1, d = j1.details || {}, jd = d.judge || {};
+    R.J1 = [j1.decision === "refuse" ? "caught" : j1.decision === "flag" ? "flag" : "pass",
+      `judge says ${jd.label || "?"} ${(+(jd.score ?? 0)).toFixed(2)}${d.obfuscated ? "; hidden by encoding" : ""}${String(jd.category || "").startsWith("judge_api_error") ? "; judge unavailable, so it failed safe" : ""}`];
+    R.J3 = [input.j3.decision === "refuse" ? "caught" : input.j3.decision === "strict" ? "flag" : "pass",
+      `risk ${input.risk_before.toFixed(2)} → ${input.risk_after.toFixed(2)}${input.j3.decision === "strict" ? ": strict mode on" : ""}`];
+  }
+  // tool rules, taint, allowlist, approval
+  const tb = blk(["T1", "T2", "A1", "T6"]);
+  R.TOOLS = !f.T && !f.LINE1 ? ["off"] : !gates.length ? ["idle", "no tool was called"]
+    : tb.length ? ["caught", tb.map((v) => `${v.layer}: ${(FRIENDLY[v.layer] || (() => v.reason))(v.g, v)}`).join("; ")] : ["pass", `${gates.length} call(s) checked: ${tools}`];
+  const a2 = blk(["A2"]);
+  R.A2 = !f.LINE1 ? ["off"] : !gates.length ? ["idle", "no tool was called"]
+    : a2.length ? ["caught", `${esc(a2[0].g.tainted_args.join(", "))} of ${a2[0].g.tool} came from a document`] : ["pass", "all arguments came from you"];
+  const d4 = blk(["D4"]), sends = gates.filter((g) => g.tool === "send_email");
+  R.D4 = !f.D ? ["off"] : !sends.length ? ["idle", "nothing was being sent out"]
+    : d4.length ? ["caught", `${String(d4[0].g.args?.to || "").split("@").pop()} is not approved`] : ["pass", "destination approved"];
+  const conf = gv.filter((v) => v.decision === "confirm" || (v.layer === "QGATE" && v.decision === "review"));
+  R.T4 = !f.T ? ["off"] : conf.length ? ["flag", `asked you before ${[...new Set(conf.map((v) => v.g.tool))].join(", ")}`] : ["idle", "nothing risky to approve"];
+  // Q-Gate
+  const qs = content.filter((c) => c.qgate);
+  if (!f.QGATE && !f.CLASSICAL) R.QGATE = ["off"];
+  else if (!qs.length) R.QGATE = ["idle", "no document was read"];
+  else {
+    const top = qs.reduce((a, b) => (b.qgate.score > a.qgate.score ? b : a));
+    const d = top.qgate.decision;
+    R.QGATE = [d === "quarantine" ? "caught" : d === "review" ? "flag" : "pass",
+      `worst sentence scored ${(+top.qgate.score).toFixed(2)} in ${top.origin}${d === "quarantine" ? ": removed before the AI read it" : d === "review" ? ": risky actions now need approval" : ""}`];
+  }
+  // data protection (ingress + output)
+  const dv = content.flatMap((c) => c.verdicts || []);
+  const denied = dv.some((v) => v.layer === "D1" && v.decision === "block"), leak = output && output.d3_canary;
+  const red = dv.filter((v) => v.layer === "D2").length + ((output && output.d2_redactions) || []).length;
+  R.DATA = !f.D ? ["off"] : denied ? ["caught", "a file you may not read was blocked"] : leak ? ["caught", "a hidden marker almost leaked; answer withheld"]
+    : red ? ["flag", `${red} secret(s) redacted`] : (content.length || output) ? ["pass", "no secrets, no leaks"] : ["idle"];
+  // output
+  R.J4 = !f.J ? ["off"] : !output || !output.j4 ? ["idle", "no answer to check"] : [output.j4.decision === "refuse" ? "caught" : "pass", `harm score ${(+output.j4.score).toFixed(2)}`];
+  const h5 = output && output.h5;
+  R.H = !f.H ? ["off"] : !h5 ? ["idle", "no documents behind this answer"]
+    : h5.decision === "abstain" ? ["caught", "no supporting source, so no guess"] : h5.decision === "prune" ? ["flag", `cut ${h5.details?.dropped ?? "some"} unsupported sentence(s)`]
+    : ["pass", `${(output.h2 || []).length} sentence(s) cited and verified`];
+  R.M = !f.M ? ["off"] : it.audit ? [it.audit.valid ? "pass" : "caught", it.audit.valid ? `${t.audit_records} record(s) sealed, chain intact` : "chain broken!"] : ["idle"];
+  return LAYERS.map(([k, name, q]) => ({ k, name, q, st: (R[k] || ["idle"])[0], why: (R[k] || [])[1] || (R[k]?.[0] === "off" ? "switched off in this configuration" : "") }));
+}
+
+function thoughtPanel(it) {
+  const t = it.trace || {}, rows = layerRows(it), idx = S.chat ? S.chat.items.indexOf(it) : -1;
+  const caught = rows.filter((r) => r.st === "caught"), flagged = rows.filter((r) => r.st === "flag");
+  // what actually happened, independent of the layers: did an email leave the company?
+  const leaked = (t.steps || []).some((s) => s.stage === "tool_exec" && s.ok && s.tool === "send_email" && isExternal(s.args?.to));
+  const allOff = rows.every((r) => r.st === "off");
+  const verdict = (leaked ? `<span class="v-bad">⛔ data left the building</span> <span class="dot">·</span> ` : "")
+    + (caught.length ? `<span class="v-bad">⛔ caught by ${esc(caught.map((r) => r.name).join(", "))}</span>`
+      : flagged.length ? `<span class="v-warn">⚠ ${flagged.length} flagged</span>`
+      : allOff ? `<span class="mut">○ no protection: nothing was checked</span>`
+      : leaked ? "" : `<span class="v-ok">✓ all clear</span>`);
+  const secs = (t.total_ms || 0) / 1000;
+  const body = `<table class="layers-t"><thead><tr><th>Layer</th><th>What it checks</th><th>Result</th><th>Why</th></tr></thead><tbody>
+    ${rows.map((r) => `<tr class="st-${r.st}"><td class="ln">${esc(r.name)}</td><td class="lq">${esc(r.q)}</td>
+      <td class="lr"><span class="res res-${r.st}">${ST[r.st][0]} ${ST[r.st][1]}</span></td><td class="lw">${esc(r.why)}</td></tr>`).join("")}
+    </tbody></table>
+    <div class="thought-foot"><span class="mut">${t.llm_calls || 0} model calls${t.llm_tokens ? ` · ${t.llm_tokens} tokens` : ""} · ${(it.verdicts || []).length} checks</span>
+      <a href="#" class="more" data-explain="${idx}">further explanation ↗</a></div>`;
+  return `<div class="row nerd-row"><details class="thought"><summary><span class="brain">🧠</span> Thought for ${secs < 0.1 ? "<0.1" : secs.toFixed(1)} s
+    <span class="dot">·</span> ${verdict}<span class="chev">▾</span></summary><div class="thought-body">${body}</div></details></div>`;
+}
+
+// ------------------------------------------------------------------ raw trace (shown inside "further explanation")
+function rawTrace(it) {
+  const t = it.trace || {};
   const on = Object.entries(t.flags || {}).filter(([, v]) => v).map(([k]) => k).join(" ") || "none";
   const parts = [`<div class="sec">⓪ setup</div>` + kv([["config", esc(S.chat ? S.chat.config : "")], ["layers on", esc(on)],
     ["agent model", esc(t.model)], ["judge model", esc(t.judge)], t.kind === "resume" ? ["resumed", t.approved ? "after you allowed" : "after you declined"] : null])];
@@ -345,8 +445,7 @@ function nerdPanel(it) {
   parts.push(`<div class="sec">${n++}. audit</div>` + kv(it.audit ? [["records", `${t.audit_records} written this turn · ${it.audit.records} in log`],
     ["chain", it.audit.valid ? `${D("pass")} intact · head ${esc(it.audit.head)}…` : `${D("block")} BROKEN: ${esc(it.audit.error)}`]]
     : [["records", `<span class="mut">audit layer off in this config</span>`]]));
-  return `<div class="row nerd-row"><details class="nerd">${sum}<div class="nerd-body">${parts.join("")}</div></details>
-    <button class="howto" data-comic title="A 5-panel comic explaining each section">how to read this ▶</button></div>`;
+  return `<div class="nerd-body">${parts.join("")}</div>`;
 }
 
 // ------------------------------------------------------------------ drawers
