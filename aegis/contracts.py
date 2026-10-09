@@ -58,3 +58,4 @@ class TurnResult(BaseModel):
     verdicts: list[Verdict]
     pending_confirmation: ToolCall | None = None
     refused: bool = False
+    trace: dict[str, Any] = Field(default_factory=dict)   # optional, additive: UI "stats for nerds" (aegis/trace.py)

@@ -117,23 +117,46 @@ class QGateDetector:
         self.model = model
         self._train_states = None
 
-    def proba(self, texts) -> np.ndarray:
-        """Same math as M3's QGate.score (sigmoid of the SVM margin on the fidelity kernel), but the
-        training states are simulated once and cached instead of on every call (~1.7 s -> ~ms)."""
+    def _kernel(self, texts):
+        """Fidelity kernel |<phi(x)|phi(train)>|^2 of each text against every training example,
+        with the training states simulated once and cached (~1.7 s -> ~ms per call)."""
         from aegis.qgate.kernel import quantum_state
         if self._train_states is None:
             self._train_states = np.array([quantum_state(x) for x in self.model.X_train])
         feats = self.model.embedder.transform(list(texts))
         states = np.array([quantum_state(f) for f in feats])
-        K = np.clip(np.abs(states.conj() @ self._train_states.T) ** 2, 0.0, 1.0)
+        return np.clip(np.abs(states.conj() @ self._train_states.T) ** 2, 0.0, 1.0), feats
+
+    def proba(self, texts) -> np.ndarray:
+        """Same math as M3's QGate.score: sigmoid of the SVM margin on the fidelity kernel."""
+        K, _ = self._kernel(texts)
         margins = np.asarray(self.model.model.decision_function(K), dtype=float).reshape(-1)
         return 1 / (1 + np.exp(-margins))
+
+    def _explain(self, sentence: str) -> dict:
+        """Evidence for the top sentence: its 4 features (the qubit angles) and the training examples
+        whose quantum states overlap most with it. Needs a model trained by scripts/train_qgate."""
+        K, feats = self._kernel([sentence])
+        out = {"features": [round(float(f), 3) for f in feats[0]]}
+        texts, labels = getattr(self.model, "train_texts", None), getattr(self.model, "train_labels", None)
+        if texts is not None and labels is not None:
+            order = np.argsort(-K[0])
+            near = lambda lab, n: [{"text": texts[i][:160], "k": round(float(K[0, i]), 3)}
+                                   for i in order if labels[i] == lab][:n]
+            out["nearest_attacks"], out["nearest_benign"] = near(1, 3), near(0, 1)
+        return out
 
     def score(self, text: str) -> Verdict:
         import time
         t = time.perf_counter()
-        p = float(self.proba(sentences(text)).max())
-        return _verdict(self.layer, p, (time.perf_counter() - t) * 1000)
+        sents = sentences(text)
+        ps = self.proba(sents)
+        top = int(ps.argmax())
+        v = _verdict(self.layer, float(ps[top]), 0)
+        v.details.update({"sentences": [{"text": s[:200], "score": round(float(p), 4)} for s, p in zip(sents, ps)],
+                          "top": top, **self._explain(sents[top])})
+        v.details["ms"] = round((time.perf_counter() - t) * 1000)
+        return v
 
 
 class RBFDetector(QGateDetector):
@@ -142,6 +165,9 @@ class RBFDetector(QGateDetector):
 
     def __init__(self, embedder, rbf):
         self.embedder, self.rbf = embedder, rbf
+
+    def _explain(self, sentence: str) -> dict:
+        return {}
 
     def proba(self, texts) -> np.ndarray:
         margins = np.asarray(self.rbf.score(self.embedder.transform(list(texts))), dtype=float)

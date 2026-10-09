@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aegis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Damion&family=Cormorant+Garamond:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<div class="app">
+  <!-- ---------------------------------------------------------- sidebar (ChatGPT/Gemini style) -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <svg class="shield" viewBox="0 0 40 46" aria-hidden="true">
+        <path d="M20 3 C27 7 32 8 37 8 C37 26 31 37 20 43 C9 37 3 26 3 8 C8 8 13 7 20 3 Z" />
+        <path d="M13 23 L18 28 L28 17" class="tick" />
+      </svg>
+      <div>
+        <div class="logo">Aegis</div>
+        <div class="tagline">guarded assistant</div>
+      </div>
+    </div>
+    <button class="new-chat" id="newChat"><span>＋</span> New chat</button>
+    <nav class="history" id="history" aria-label="Chat history"></nav>
+    <div class="side-foot">
+      <button class="side-link" id="openAudit"><span class="ico">⛓</span> Audit log <span class="pill" id="auditPill"></span></button>
+      <button class="side-link" id="openResults"><span class="ico">▤</span> Results</button>
+      <button class="side-link" id="toggleTheme"><span class="ico">◐</span> <span id="themeLabel">Ink mode</span></button>
+      <div class="whoami">
+        <div class="avatar">M</div>
+        <div><div class="name">Meera · Ops</div><div class="sub" id="modelLine">model</div></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ---------------------------------------------------------- main -->
+  <main class="main">
+    <header class="topbar">
+      <button class="icon-btn only-mobile" id="menuBtn" aria-label="Menu">☰</button>
+      <div class="picker" id="picker">
+        <button class="picker-btn" id="pickerBtn" aria-haspopup="listbox">
+          <span id="pickerName">Aegis · Full protection</span> <span class="caret">▾</span>
+        </button>
+        <div class="picker-menu" id="pickerMenu" role="listbox" hidden></div>
+      </div>
+      <div class="layers" id="layerChips" title="Layers switched on in this chat"></div>
+    </header>
+
+    <section class="chat" id="chat" aria-live="polite">
+      <div class="empty" id="empty">
+        <div class="empty-logo">Aegis</div>
+        <p class="motto">The model can be fooled. <em>It cannot act on it.</em></p>
+        <div class="starters" id="starters"></div>
+      </div>
+    </section>
+
+    <footer class="composer">
+      <div class="compose-box">
+        <textarea id="input" rows="1" placeholder="Message Aegis…   (Enter to send, Shift+Enter for a new line)"></textarea>
+        <button class="send" id="send" aria-label="Send">➤</button>
+      </div>
+      <div class="fineprint">Simulated tools only: emails land in a fake outbox. Every decision is sealed in a hash-chained log.</div>
+    </footer>
+  </main>
+</div>
+
+<!-- ------------------------------------------------------------ drawers -->
+<div class="drawer" id="drawer" hidden>
+  <div class="drawer-card">
+    <div class="drawer-head"><h2 id="drawerTitle"></h2><button class="icon-btn" id="closeDrawer" aria-label="Close">✕</button></div>
+    <div class="drawer-body" id="drawerBody"></div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

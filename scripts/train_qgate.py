@@ -24,6 +24,7 @@ print(f"C: qgate={c_q}  rbf={c_r}" + ("" if tuned.exists() else "  (untuned: run
 
 t = time.time()
 qgate = QGate(C=c_q).fit(X, y)
+qgate.train_texts, qgate.train_labels = list(X), list(y)    # lets the UI show the closest known examples
 qgate.save(QGATE_MODEL)
 print(f"Q-Gate trained in {time.time() - t:.0f}s -> {QGATE_MODEL}")
 

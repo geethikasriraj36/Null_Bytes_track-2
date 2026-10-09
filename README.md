@@ -22,13 +22,18 @@ A defense-in-depth security layer for a tool-using LLM agent, with a quantum-ker
     python -m scripts.eval_qgate                             # E1/E2 -> results/qgate_e1_e2.json
     python -m scripts.qgate_figures                          # slide figures -> results/qgate_circuit.png, qgate_e1.png
 
-### Demo (two tabs: baseline on 8001, Aegis on 8000)
+### Demo UI (web app: ChatGPT-style sidebar, model picker = ablation switch, stats for nerds)
 
-    AEGIS_CONFIG=configs/0_baseline.yaml AEGIS_AUDIT=logs/baseline_audit.jsonl chainlit run app.py --port 8001
-    AEGIS_CONFIG=configs/7_full.yaml     AEGIS_AUDIT=logs/demo_audit.jsonl     chainlit run app.py --port 8000
+    python -m web.server                                     # http://localhost:8000
+    AEGIS_PORT=8100 python -m web.server                     # another port
+    AEGIS_MODEL=mock AEGIS_JUDGE_MODEL=mock python -m web.server   # OFFLINE backup, no API (labelled in the UI)
     python -m scripts.check_e2e                              # guide section 9 checklist, ~10 LLM calls
-    python -m scripts.verify_audit logs/demo_audit.jsonl     # tamper check
-    # Windows cmd: use `set AEGIS_CONFIG=...` on its own line first. Strings to paste: demo_inputs.txt
+    python -m scripts.verify_audit logs/audit.jsonl          # tamper check
+    # Windows cmd: `set AEGIS_MODEL=mock` etc. on separate lines first. Strings to paste: demo_inputs.txt
+
+Use the model picker to switch between "Aegis · Full protection" and "Baseline · no protection" (each opens a new chat).
+The offline model is a scripted stand-in that reproduces the behaviour measured live on gpt-oss-120b; never use it for results.
+The old Chainlit UI still works: `chainlit run app.py`.
 
 ### Evaluation
 

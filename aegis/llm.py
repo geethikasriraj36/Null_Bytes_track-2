@@ -1,6 +1,7 @@
 """The ONLY place the team calls an LLM. Model pinned by env var; temperature 0."""
 import json, os, re, time
 import litellm
+from aegis import trace
 
 MODEL = os.environ.get("AEGIS_MODEL", "gpt-4o-mini")        # e.g. "anthropic/claude-...", "gemini/gemini-..."
 JUDGE_MODEL = os.environ.get("AEGIS_JUDGE_MODEL", MODEL)
@@ -44,12 +45,29 @@ def _complete(**kw):
                 raise
             time.sleep(wait)
 
+def _traced(role: str, **kw):
+    """_complete + one trace entry (model, latency, tokens) for the UI's stats panel."""
+    t0 = time.perf_counter()
+    try:
+        r = _complete(**kw)
+    except Exception as e:
+        trace.llm_call(role, kw.get("model", ""), (time.perf_counter() - t0) * 1000, None, False, describe(e))
+        raise
+    usage = getattr(r, "usage", None)
+    trace.llm_call(role, kw.get("model", ""), (time.perf_counter() - t0) * 1000,
+                   getattr(usage, "total_tokens", None), True)
+    return r
+
 def chat(messages: list[dict], tools: list[dict] | None = None):
     """Returns the assistant message: .content (str|None) and .tool_calls (list|None).
     Raises on API failure after retries; pipeline._loop turns that into a safe message."""
+    if MODEL == "mock":                                          # offline stand-in, see aegis/mockllm.py
+        from aegis import mockllm
+        trace.llm_call("agent", "mock (offline)", 0, None, True)
+        return mockllm.chat(messages, tools)
     try:
-        r = _complete(model=MODEL, messages=messages, tools=tools or None,
-                      temperature=0, num_retries=3, timeout=TIMEOUT)
+        r = _traced("agent", model=MODEL, messages=messages, tools=tools or None,
+                    temperature=0, num_retries=3, timeout=TIMEOUT)
     except Exception as e:
         _note(e)
         raise
@@ -67,12 +85,16 @@ def _parse(raw: str) -> dict:
 def judge(system: str, text: str) -> dict:
     """Classifier-style call. Must return JSON; on ANY failure (API error, timeout, bad JSON)
     we fail CLOSED and report the text as unsafe."""
+    if JUDGE_MODEL == "mock":
+        from aegis import mockllm
+        trace.llm_call("judge", "mock (offline)", 0, None, True)
+        return mockllm.judge(system, text)
     # the text cannot close our delimiter and talk to the judge directly
     text = text.replace("</text>", "</ text>")
     try:
-        r = _complete(model=JUDGE_MODEL, temperature=0, num_retries=3, timeout=TIMEOUT / 2,
-                      messages=[{"role": "system", "content": system},
-                                {"role": "user", "content": f"<text>\n{text}\n</text>"}])
+        r = _traced("judge", model=JUDGE_MODEL, temperature=0, num_retries=3, timeout=TIMEOUT / 2,
+                    messages=[{"role": "system", "content": system},
+                              {"role": "user", "content": f"<text>\n{text}\n</text>"}])
         return _parse(r.choices[0].message.content or "")
     except (ValueError, TypeError):
         return dict(UNSAFE, category="judge_parse_error")
