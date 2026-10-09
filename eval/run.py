@@ -24,7 +24,7 @@ from aegis.audit import chain
 from aegis.audit.chain import append_event
 from aegis.config import CFG, use
 from aegis.contracts import SessionState
-from aegis.ingress.scan import canary_hit, scan
+from aegis.adapters import canary_hit, scan
 from aegis.inputguard.classify import classify_output
 from aegis.output.refusal import ABSTAIN, REFUSAL
 from aegis.toolsafety.gate import ALLOW

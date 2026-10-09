@@ -1,15 +1,29 @@
-"""Train Q-Gate and the RBF baseline on the SAME split. Run: python -m scripts.train_qgate
+"""Train Q-Gate and the RBF baseline on the SAME split and the SAME 4 features. Run: python -m scripts.train_qgate
 Input:  data/qgate_train.jsonl  lines of {"text": ..., "label": 0|1}   (1 = injection)
-Output: models/qgate.pkl, models/rbf.pkl"""
+Output: models/qgate.pkl (M3's QGate), models/rbf.pkl (M3's RBFBaseline + the Q-Gate embedder)"""
 import json, random, time
 from pathlib import Path
-from aegis.qgate.detector import QGate
-from aegis.qgate.baseline_rbf import RBFBaseline
 
-rows = [json.loads(l) for l in Path("data/qgate_train.jsonl").read_text().splitlines() if l.strip()]
+import joblib
+
+from aegis.adapters import QGATE_MODEL, RBF_MODEL
+from aegis.qgate.baseline_rbf import RBFBaseline
+from aegis.qgate.detector import QGate
+
+rows = [json.loads(l) for l in Path("data/qgate_train.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
 random.Random(0).shuffle(rows)
 rows = rows[:600]                                    # statevector kernel: 600 rows train in well under a minute
 X, y = [r["text"] for r in rows], [int(r["label"]) for r in rows]
 print(f"training on {len(X)} rows, {sum(y)} injections")
-t = time.time(); QGate().fit(X, y).save(); print(f"Q-Gate trained in {time.time() - t:.0f}s")
-RBFBaseline().fit(X, y).save(); print("RBF baseline trained")
+
+t = time.time()
+qgate = QGate().fit(X, y)
+qgate.save(QGATE_MODEL)
+print(f"Q-Gate trained in {time.time() - t:.0f}s -> {QGATE_MODEL}")
+
+# fairness: the classical twin sees exactly the features Q-Gate's kernel sees
+features = qgate.embedder.transform(X)
+rbf = RBFBaseline().fit(features, y)
+RBF_MODEL.parent.mkdir(parents=True, exist_ok=True)
+joblib.dump({"embedder": qgate.embedder, "rbf": rbf}, RBF_MODEL)
+print(f"RBF baseline trained -> {RBF_MODEL}")

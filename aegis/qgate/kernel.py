@@ -1,51 +1,119 @@
-"""Quantum feature map + fidelity kernel (PennyLane simulator).
 
-Each text becomes N_QUBITS numbers in [0, pi]. Each number rotates one qubit (Hadamard + RZ).
-CNOT-RZ-CNOT blocks entangle neighbouring qubits so the kernel also sees PAIRS of features.
-
-Kernel value k(a, b) = |<phi(a)|phi(b)>|^2  (fidelity: 1 = same state, 0 = orthogonal).
-
-Two ways to compute it, same numbers:
-  * overlap circuit  : run phi(a) then phi(b)^dagger, measure P(all zeros). This is how real
-                       quantum hardware would do it. Needs one circuit per PAIR -> n^2 circuits.
-  * statevector trick: on a simulator, get the state of phi(x) once per sample and take dot
-                       products. n circuits instead of n^2. Used by default for speed.
-"""
 import numpy as np
 import pennylane as qml
 
+
 N_QUBITS = 4
+WIRES = list(range(N_QUBITS))
+
 dev = qml.device("default.qubit", wires=N_QUBITS)
 
+
 def feature_map(x):
-    for i in range(N_QUBITS):
-        qml.Hadamard(wires=i)
-        qml.RZ(x[i], wires=i)
+    """
+    Encode four input features into a four-qubit quantum state.
+
+    Input:
+        x: Four real-valued features, each in [0, pi].
+
+    Feature map:
+        1. Apply Hadamard gates.
+        2. Encode each feature using RZ(x_i).
+        3. Apply nearest-neighbor entangling blocks:
+           CNOT -> RZ((pi - x_i)*(pi - x_j)) -> CNOT.
+
+    The input is expected to be preprocessed by embed.py.
+    """
+    x = np.asarray(x, dtype=float)
+
+    if x.shape != (N_QUBITS,):
+        raise ValueError("Input must contain exactly four features.")
+
+    if not np.all(np.isfinite(x)):
+        raise ValueError("Input features must be finite.")
+
+    if np.any(x < 0) or np.any(x > np.pi):
+        raise ValueError("Input features must be in [0, pi].")
+
+    for wire in WIRES:
+        qml.Hadamard(wires=wire)
+
+    for wire in WIRES:
+        qml.RZ(x[wire], wires=wire)
+
     for i in range(N_QUBITS - 1):
-        qml.CNOT(wires=[i, i + 1])
-        qml.RZ((np.pi - x[i]) * (np.pi - x[i + 1]), wires=i + 1)
-        qml.CNOT(wires=[i, i + 1])
+        j = i + 1
+        angle = (np.pi - x[i]) * (np.pi - x[j])
+
+        qml.CNOT(wires=[i, j])
+        qml.RZ(angle, wires=j)
+        qml.CNOT(wires=[i, j])
+
 
 @qml.qnode(dev)
-def _state(x):
+def _state_circuit(x):
+    """Return the state prepared by the feature map."""
     feature_map(x)
     return qml.state()
 
-@qml.qnode(dev)
-def _overlap(x1, x2):
-    feature_map(x1)
-    qml.adjoint(feature_map)(x2)
-    return qml.probs(wires=range(N_QUBITS))
 
-def k_hardware_style(x1, x2) -> float:
-    """The overlap-circuit version. Use it on a slide / to prove the trick gives the same value."""
-    return float(_overlap(x1, x2)[0])
+def quantum_state(x):
+    """Return the four-qubit state vector for input x."""
+    return np.asarray(_state_circuit(x), dtype=complex)
 
-def states(X) -> np.ndarray:
-    return np.array([_state(x) for x in X])
 
-def gram(A, B=None) -> np.ndarray:
-    """Kernel matrix |<phi(a)|phi(b)>|^2 for all pairs. B=None means A vs A (training)."""
-    SA = states(A)
-    SB = SA if B is None else states(B)
-    return np.abs(SA.conj() @ SB.T) ** 2
+def kernel_value(x, y):
+    """
+    Calculate the fidelity kernel:
+        K(x, y) = |<phi(x)|phi(y)>|^2
+    """
+    state_x = quantum_state(x)
+    state_y = quantum_state(y)
+
+    overlap = np.vdot(state_x, state_y)
+    value = float(np.abs(overlap) ** 2)
+
+    # Protect against negligible floating-point excursions.
+    return float(np.clip(value, 0.0, 1.0))
+
+
+def gram(X, Y=None):
+    """
+    Construct a kernel matrix.
+
+    If Y is None, compute the square Gram matrix K(X, X).
+    Otherwise, compute the cross-kernel matrix K(X, Y).
+    """
+    X = np.asarray(X, dtype=float)
+
+    if X.ndim != 2 or X.shape[1] != N_QUBITS:
+        raise ValueError("X must have shape (n_samples, 4).")
+
+    if Y is None:
+        Y = X
+    else:
+        Y = np.asarray(Y, dtype=float)
+
+        if Y.ndim != 2 or Y.shape[1] != N_QUBITS:
+            raise ValueError("Y must have shape (n_samples, 4).")
+
+    states_X = [quantum_state(row) for row in X]
+    states_Y = states_X if Y is X else [quantum_state(row) for row in Y]
+
+    matrix = np.empty((len(X), len(Y)), dtype=float)
+
+    for i, state_x in enumerate(states_X):
+        for j, state_y in enumerate(states_Y):
+            matrix[i, j] = np.abs(np.vdot(state_x, state_y)) ** 2
+
+    return np.clip(matrix, 0.0, 1.0)
+
+
+def k_hardware_style(x, y):
+    """
+    Compute the same kernel using a direct overlap-style calculation.
+
+    This serves as an independent implementation for testing the
+    state-vector kernel calculation.
+    """
+    return kernel_value(x, y)

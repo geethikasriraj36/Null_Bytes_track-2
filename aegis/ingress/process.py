@@ -1,26 +1,91 @@
-"""Ingress: D1 ACL + label, D3 canary check, D2 redaction, provenance + taint tag."""
-from aegis.contracts import ContentItem, SessionState, Verdict
-from aegis.ingress.scan import scan, canary_hit
 
-def label_for(origin: str) -> str:
-    if "secret" in origin: return "secret"
-    if origin.startswith("public") or origin.endswith("faq.md"): return "public"
-    return "internal"
+from dataclasses import dataclass, field
+from typing import Any
 
-def process(raw: str, source: str, origin: str, state: SessionState, enabled: bool = True) -> tuple[ContentItem, list[Verdict]]:
-    item = ContentItem(text=raw, source=source, origin=origin, label=label_for(origin), tainted=source != "user")
-    if not enabled:
-        return item, []
-    v = []
-    if item.label not in state.permissions:                         # D1
-        item.text = "[ACCESS DENIED]"
-        v.append(Verdict(layer="D1", decision="block", score=1, reason="acl"))
-    if canary_hit(item.text):                                       # D3 (before redaction)
-        v.append(Verdict(layer="D3", decision="flag", score=1, reason="canary_in_ingress"))
-    item.text, found = scan(item.text)                              # D2
-    item.redactions = len(found)
-    if found:
-        v.append(Verdict(layer="D2", decision="redact", score=0.5, details={"types": found}))
-    if item.tainted: state.seen_tainted = True
-    if item.label in ("internal", "secret"): state.seen_private = True
-    return item, v
+from aegis.ingress.scan import canary_hit, redact, scan
+
+
+@dataclass
+class ContentItem:
+    text: str
+    source: str
+    label: str = "internal"
+    allowed_roles: list[str] = field(default_factory=lambda: ["user", "agent", "admin"])
+    tainted: bool = True
+    canary_hits: list[str] = field(default_factory=list)
+    scan_matches: list[dict[str, Any]] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+    accessible: bool = True
+
+
+LABEL_ACCESS = {
+    "public": {"user", "agent", "admin"},
+    "internal": {"agent", "admin"},
+    "confidential": {"admin"},
+    "restricted": set(),
+}
+
+
+def process(
+    text: str,
+    *,
+    source: str,
+    label: str = "internal",
+    user_role: str = "agent",
+    allowed_roles: list[str] | None = None,
+    redact_sensitive: bool = True,
+    metadata: dict[str, Any] | None = None,
+) -> ContentItem:
+    """
+    Apply ACL checks, scan for canaries and sensitive values,
+    redact sensitive values, and attach provenance/taint metadata.
+
+    Access is denied before content is returned if the role is not allowed.
+    """
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+
+    if not source or not isinstance(source, str):
+        raise ValueError("source must be a non-empty string")
+
+    if label not in LABEL_ACCESS:
+        raise ValueError(f"Unknown sensitivity label: {label}")
+
+    roles = set(allowed_roles) if allowed_roles is not None else LABEL_ACCESS[label]
+    if user_role not in roles:
+        return ContentItem(
+            text="[ACCESS DENIED]",
+            source=source,
+            label=label,
+            allowed_roles=sorted(roles),
+            tainted=True,
+            metadata={
+                **(metadata or {}),
+                "access_denied": True,
+                "original_source": source,
+            },
+            accessible=False,
+        )
+
+    hits = canary_hit(text)
+    scan_result = scan(text)
+    cleaned = redact(text) if redact_sensitive else text
+
+    return ContentItem(
+        text=cleaned,
+        source=source,
+        label=label,
+        allowed_roles=sorted(roles),
+        tainted=True,
+        canary_hits=hits,
+        scan_matches=scan_result["matches"],
+        metadata={
+            **(metadata or {}),
+            "source": source,
+            "label": label,
+            "tainted": True,
+            "redacted": redact_sensitive and cleaned != text,
+            "access_denied": False,
+        },
+        accessible=True,
+    )

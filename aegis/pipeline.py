@@ -7,8 +7,7 @@ from aegis import llm
 from aegis.audit import chain
 from aegis.inputguard.normalize import normalize
 from aegis.inputguard import classify, risk
-from aegis.ingress.process import process
-from aegis.ingress.scan import scan, canary_hit
+from aegis.adapters import process, scan, canary_hit      # M3 ingress behind the section-10 contract
 from aegis.line1 import taint, action_token
 from aegis.toolsafety.gate import check_call, decide, REGISTRY
 from aegis.tools.sim import execute, TOOLS, TOOL_SPECS
@@ -25,9 +24,8 @@ _det: dict = {}
 def detector():
     key = "qgate" if CFG["QGATE"] else "rbf"
     if key not in _det:
-        from aegis.qgate.detector import QGate
-        from aegis.qgate.baseline_rbf import RBFBaseline
-        _det[key] = QGate.load() if key == "qgate" else RBFBaseline.load()
+        from aegis.adapters import load_qgate, load_rbf
+        _det[key] = load_qgate() if key == "qgate" else load_rbf()
     return _det[key]
 
 _nli: dict = {}
