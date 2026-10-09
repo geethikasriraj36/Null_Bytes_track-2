@@ -1,59 +1,159 @@
-# Null_Bytes_track-2
-hackathon repo
-
-## Aegis
-
-A defense-in-depth security layer for a tool-using LLM agent, with a quantum-kernel injection detector (Q-Gate).
-*The model can be fooled, but it cannot act on it.*
-
-### Setup (once per laptop; keep the repo at a short path on Windows, e.g. `C:\aegis`)
-
-    python -m venv .venv && source .venv/bin/activate        # Windows: .venv\Scripts\activate
-    pip install -r requirements.txt
-    cp .env.example .env                                     # add your own GROQ_API_KEY (console.groq.com)
-    python -m scripts.setup_data                             # fake company DB + secret file
-    pytest -q                                                # all tests, no API calls
-
-### Q-Gate (no API calls)
-
-    python -m scripts.build_qgate_data                       # deepset/prompt-injections + our docs -> data/qgate_*.jsonl
-    python -m scripts.tune_qgate                             # same C grid, same folds, train split only, both models
-    python -m scripts.train_qgate                            # -> models/qgate.pkl, models/rbf.pkl
-    python -m scripts.eval_qgate                             # E1/E2 -> results/qgate_e1_e2.json
-    python -m scripts.qgate_figures                          # slide figures -> results/qgate_circuit.png, qgate_e1.png
-
-### Demo UI (web app: ChatGPT-style sidebar, model picker = ablation switch, stats for nerds)
-
-    python -m web.server                                     # http://localhost:8000
-    AEGIS_PORT=8100 python -m web.server                     # another port
-    AEGIS_MODEL=mock AEGIS_JUDGE_MODEL=mock python -m web.server   # OFFLINE backup, no API (labelled in the UI)
-    python -m scripts.check_e2e                              # guide section 9 checklist, ~10 LLM calls
-    python -m scripts.verify_audit logs/audit.jsonl          # tamper check
-    # Windows cmd: `set AEGIS_MODEL=mock` etc. on separate lines first. Strings to paste: demo_inputs.txt
-
-Use the model picker to switch between "Aegis · Full protection" and "Baseline · no protection" (each opens a new chat).
-The offline model is a scripted stand-in that reproduces the behaviour measured live on gpt-oss-120b; never use it for results.
-The old Chainlit UI still works: `chainlit run app.py`.
-
-### Evaluation
-
-    python -m sim.build_cases                                # regenerates sim/cases/aegis_suite.jsonl
-    python -m eval.run --configs 0_baseline 1_line1 7_full --workers 2   # real pipeline + LLM
-    python -m eval.run --mode policy                         # M4 keyword prototype only, no API
-    python -m scripts.plot_results                           # charts from results/summary.csv
-
-Free-tier note: Groq allows ~200k tokens/day per model; one full config over all cases needs ~1M+.
-Run the ablation with a paid key (Groq Dev tier costs a few dollars for the whole run) or split it across teammates' keys.
-
-### Where things are
-
-| Path | Owner | What |
-| --- | --- | --- |
-| `aegis/pipeline.py`, `llm.py`, `inputguard/`, `grounding/`, `app.py` | M1 | agent loop, J1-J5, UI |
-| `aegis/tools/`, `line1/`, `toolsafety/`, `policy/` | M2 | simulated tools, taint, gate, A3 |
-| `aegis/qgate/`, `ingress/` | M3 | Q-Gate, RBF twin, ingress scanning |
-| `aegis/adapters.py` | M1 | M3 modules behind the frozen contract |
-| `aegis/audit/`, `output/`, `decide.py`, `eval/`, `sim/` | M4 | audit chain, H2/H3/H5, eval, cases |
-| `docs/M1_notes.md` | M1 | thresholds, integration log, slide drafts |
-
-`.env` is loaded automatically (`aegis/__init__.py`). Never commit it.
+Aegis — Defense-in-Depth for Tool-Using AI Agents
+<p align="center">
+  <strong>The model can be fooled. It cannot act on it.</strong><br>
+  A layered security system for tool-using LLM agents, with a quantum-kernel prompt-injection detector.
+</p>
+<p align="center">
+  <img src="docs/aegis_architecture_flowchart.png" alt="Aegis architecture flowchart showing input guard, tool safety gate, ingress protection, Q-Gate, output checks, hallucination grounding checks, and hash-chained audit log" width="900">
+</p>
+Overview
+LLM agents can be attacked by both user jailbreaks and malicious instructions embedded in retrieved content. Aegis wraps a tool-using agent in layered checks so that a model being fooled does not automatically mean an unsafe action can execute.
+The system combines:
+Input guard for normalization, jailbreak classification, session-risk handling, and refusal.
+Ingress and Line 1 checks for access control, provenance and taint tagging, secret/PII scanning, and canary checks.
+Q-Gate: a quantum-kernel SVM that scores untrusted text for prompt injection, alongside a classical RBF SVM baseline.
+Deterministic Tool Safety Gate to decide ALLOW, CONFIRM, or BLOCK for proposed actions.
+Output checks for moderation, leak scanning, citation/grounding checks, and abstention when support is missing.
+Hash-chained audit log for recording decisions and verifying chain integrity.
+Q-Gate is advisory: it can pass, review, or quarantine content and may contribute to escalation, but it does not independently hard-block tool execution. Deterministic policy layers govern action execution.
+Architecture
+The request path follows the guide's core workflow:
+A user message reaches the input guard.
+The agent plans an answer or proposes a tool call.
+Retrieved/tool content passes through ingress protection, is tagged with provenance and taint, and is checked by Line 1 and Q-Gate.
+A proposed tool call is evaluated by the Tool Safety Gate, which chooses ALLOW, CONFIRM, or BLOCK.
+The draft answer passes output checks before it is returned.
+Each stage records events in the hash-chained audit log.
+The orchestrator uses an explicit agent loop, capped at five tool steps per turn, so tool calls can be gated and logged.
+Hallucination and grounding checks
+Aegis includes checks intended to keep answers grounded in retrieved passages:
+Layer	Role
+H1 — Grounded generation	The prompt asks for passage-ID citations or the response “not found” when retrieved material does not support an answer.
+H2 — Citation/source check	Checks that cited passage IDs exist and that numbers/names in the answer appear in the cited source.
+H3 — Claim entailment (recommended)	Uses an NLI cross-encoder to check whether cited passages entail answer claims. This is marked as recommended in the guide, not an unconditional MVP requirement.
+H5 — Final decision	Chooses ANSWER, PRUNE/PRUNED, or ABSTAIN based on the checking result.
+The guide's example is a vendor update: the safe final answer cites the passage stating that shipping to Pune takes 4 days. An answer that cites a passage saying “5 to 7 days” but claims “9 days” should have the unsupported sentence pruned. An answer with no supported sentence should abstain.
+Tool and data safety
+The five simulated tools are:
+`search_docs`
+`read_file`
+`query_db`
+`write_note`
+`send_email`
+The demo uses a fake mailbox, SQLite database, and local documents. `send_email` writes to the simulated outbox rather than sending real email. The tool gate validates calls and arguments, applies policy and outbound-destination restrictions, and uses confirmation for risky actions. Approved actions use a single-use token bound to the tool and arguments.
+Ingress protection covers ACL checks, secret/PII redaction, canary checks, and provenance/taint tagging. Untrusted retrieved text remains marked as data rather than instructions.
+Q-Gate: quantum-kernel injection detector
+Q-Gate uses a quantum-kernel SVM to score untrusted content for possible prompt injection. A classical RBF SVM is the comparison baseline, using the same features.
+Text features: TF-IDF character n-grams, SVD, and scaling to four values in `[0, π]`.
+Quantum circuit: PennyLane `default.qubit` simulator with a ZZ feature map.
+Kernel: fidelity/squared-overlap score `|⟨φ(a)|φ(b)⟩|²`.
+Output: an advisory score and a PASS, REVIEW, or QUARANTINE decision.
+The score is a sigmoid of the SVM margin, not a calibrated probability. The implementation runs on a simulator; the project does not claim quantum advantage or real-hardware results.
+The evaluation guide calls the comparisons E1 (Q-Gate vs. classical RBF) and E2 (incremental catches). Use the result values generated by the repository's evaluation scripts; this README does not make performance claims beyond those files.
+Auditability
+Aegis records events such as input, tool-gate decisions, ingress, confirmation, errors, and output in a JSONL hash chain. Raw user text and tool output are not intended to be stored in the audit log; the guide specifies hashes instead. The verification command checks chain integrity.
+```bash
+python -m scripts.verify_audit logs/audit.jsonl
+```
+The guide notes an important limit: the hash chain can detect edits, reordering, or deletion in the middle of a log, but truncation at the end requires the latest hash to be stored separately.
+Repository layout
+Path	Responsibility
+`aegis/pipeline.py`, `llm.py`, `inputguard/`, `grounding/`, `app.py`	Agent loop, language guards, grounding, UI
+`aegis/tools/`, `line1/`, `toolsafety/`, `policy/`	Simulated tools, taint handling, deterministic action gate
+`aegis/qgate/`, `ingress/`	Q-Gate, RBF baseline, ingress scanning
+`aegis/adapters.py`	Adapter layer for modules behind the shared contract
+`aegis/audit/`, `output/`, `decide.py`, `eval/`, `sim/`	Audit chain, H2/H3/H5, evaluation, test cases
+`docs/M1_notes.md`	Thresholds, integration log, slide drafts
+Requirements
+The execution guide specifies Python 3.11 and the libraries in `requirements.txt`. The Q-Gate implementation uses PennyLane and scikit-learn; the UI uses the web server in this repository.
+Setup
+Create and activate a virtual environment, install dependencies, configure your local environment file, then create the simulated data.
+```bash
+python -m venv .venv
+```
+Windows Command Prompt:
+```bat
+.venv\Scripts\activate
+pip install -r requirements.txt
+copy .env.example .env
+python -m scripts.setup_data
+pytest -q
+```
+macOS/Linux:
+```bash
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+python -m scripts.setup_data
+pytest -q
+```
+Add your own provider key to `.env`. Do not commit `.env` or real credentials. The tests shown above are intended to run without API calls.
+Run the demo
+Start the web UI:
+```bash
+python -m web.server
+```
+Then open http://localhost:8000.
+To run on another port:
+```bash
+AEGIS_PORT=8100 python -m web.server
+```
+Offline UI backup (scripted stand-in, not for performance results):
+```bash
+AEGIS_MODEL=mock AEGIS_JUDGE_MODEL=mock python -m web.server
+```
+The model picker can switch between Aegis · Full protection and Baseline · no protection. The repository also retains the Chainlit UI:
+```bash
+chainlit run app.py
+```
+Train and evaluate Q-Gate
+These commands do not require LLM API calls:
+```bash
+python -m scripts.build_qgate_data
+python -m scripts.tune_qgate
+python -m scripts.train_qgate
+python -m scripts.eval_qgate
+python -m scripts.qgate_figures
+```
+The scripts generate the Q-Gate/RBF models and evaluation artifacts described in the repository. Keep training and test data separate; tune thresholds on a development split, not on the test set.
+Run evaluation
+Build the test cases:
+```bash
+python -m sim.build_cases
+```
+Run the real pipeline with an LLM:
+```bash
+python -m eval.run --configs 0_baseline 1_line1 7_full --workers 2
+python -m scripts.plot_results
+```
+The policy-only prototype does not use an API:
+```bash
+python -m eval.run --mode policy
+```
+For full evaluation runs, plan for provider rate limits and token costs. The execution guide estimates that a full run over all cases can exceed free-tier daily quotas.
+End-to-end and audit checks
+```bash
+python -m scripts.check_e2e
+python -m scripts.verify_audit logs/audit.jsonl
+```
+The guide's vendor-update acceptance checks are:
+The answer says “4 days” with a valid passage citation.
+The simulated outbox has no `evil-corp` line.
+The layer panel names Q-Gate and/or deterministic A2/D4 protections.
+Audit verification reports CHAIN INTACT.
+Scope and limitations
+All tools are simulated; the demo does not send real email.
+Q-Gate runs on a simulator; no quantum advantage is claimed.
+Q-Gate is advisory and does not replace deterministic action policy.
+H3 claim-entailment checks are recommended in the execution guide.
+Adaptive attacks, small test sets, and model-dependent behavior remain limitations.
+No production authentication/SSO or production secret-management claim is made.
+Team responsibilities
+The execution guide defines four workstreams:
+Member	Focus
+M1	Agent core, language guards, integration, UI
+M2	Simulated tools, Line 1, tool safety and action gate
+M3	Q-Gate, classical baseline, ingress/data protection
+M4	Evaluation, audit chain, hallucination checks, results and deck
+License and attribution
+This README does not specify a license because the execution guide does not identify one. Add a license section only after the repository's intended license is confirmed.
