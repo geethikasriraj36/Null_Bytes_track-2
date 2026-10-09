@@ -1,0 +1,6 @@
+Metric	Q-Gate	RBF baseline	Better
+AUROC	0.8214	0.8140	Q-Gate
+Recall	63.33%	65.00%	RBF
+Precision	86.36%	82.98%	Q-Gate
+False-positive rate	10.71%	14.29%	Q-Gate
+E2 attacks caught only by this model	0	1	RBF catches one unique attack

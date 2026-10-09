@@ -37,22 +37,27 @@ def test_untrusted_note_read_preserves_its_label(tmp_path, monkeypatch):
 
     files = tmp_path / "files"
     files.mkdir()
+    monkeypatch.setattr(sim, "FILES", files)
 
-    note = {
-        "title": "Review",
-        "body": "Instructions received from a vendor",
-        "trust": "untrusted",
-    }
+    ctx = {"docs": {}, "outbox": [], "executed": [], "seen_tainted": True}
+    ctx_token = sim.CTX.set(ctx)
+    try:
+        sim.write_note("Review", "Instructions received from a vendor")
+    finally:
+        sim.CTX.reset(ctx_token)
 
+    saved_note = json.loads(
+        (tmp_path / "notes.jsonl").read_text(encoding="utf-8").splitlines()[0]
+    )
     (files / "notes.jsonl").write_text(
-        json.dumps(note) + "\n",
+        json.dumps(saved_note) + "\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr(sim, "FILES", files)
 
     result = sim.read_file("notes.jsonl")
 
     assert len(result) == 1
-    saved = json.loads(result[0]["text"])
-    assert saved["title"] == "Review"
-    assert saved["trust"] == "untrusted"
+    read_back = json.loads(result[0]["text"])
+    assert read_back["title"] == "Review"
+    assert read_back["body"] == "Instructions received from a vendor"
+    assert read_back["trust"] == "untrusted"
