@@ -115,9 +115,19 @@ class QGateDetector:
 
     def __init__(self, model):
         self.model = model
+        self._train_states = None
 
     def proba(self, texts) -> np.ndarray:
-        return np.asarray(self.model.score(list(texts)), dtype=float)
+        """Same math as M3's QGate.score (sigmoid of the SVM margin on the fidelity kernel), but the
+        training states are simulated once and cached instead of on every call (~1.7 s -> ~ms)."""
+        from aegis.qgate.kernel import quantum_state
+        if self._train_states is None:
+            self._train_states = np.array([quantum_state(x) for x in self.model.X_train])
+        feats = self.model.embedder.transform(list(texts))
+        states = np.array([quantum_state(f) for f in feats])
+        K = np.clip(np.abs(states.conj() @ self._train_states.T) ** 2, 0.0, 1.0)
+        margins = np.asarray(self.model.model.decision_function(K), dtype=float).reshape(-1)
+        return 1 / (1 + np.exp(-margins))
 
     def score(self, text: str) -> Verdict:
         import time

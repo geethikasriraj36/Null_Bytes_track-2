@@ -2,6 +2,7 @@
 import json
 from types import SimpleNamespace as NS
 
+import numpy as np
 import pytest
 
 from aegis import adapters, config, llm, pipeline
@@ -127,3 +128,18 @@ def test_pipeline_quarantines_injected_doc_with_qgate(tiny_models, tmp_path, mon
     assert any(v.layer == "QGATE" and v.decision in ("quarantine", "review") for v in r.verdicts)
     if any(v.layer == "QGATE" and v.decision == "quarantine" for v in r.verdicts):
         assert "evil-corp" not in seen[0] and "QUARANTINED" in seen[0]
+
+
+def test_cached_qgate_matches_m3_score_exactly(tiny_models):
+    qg, _ = tiny_models
+    texts = BENIGN[:3] + ATTACK[:3]
+    assert np.allclose(qg.proba(texts), qg.model.score(texts), atol=1e-9)
+
+
+def test_hardware_style_overlap_circuit_matches_statevector_gram():
+    from aegis.qgate import kernel
+    X = np.random.RandomState(0).uniform(0, np.pi, (4, 4))
+    G = kernel.gram(X)
+    for i in range(4):
+        for j in range(4):
+            assert abs(G[i, j] - kernel.k_hardware_style(X[i], X[j])) < 1e-9

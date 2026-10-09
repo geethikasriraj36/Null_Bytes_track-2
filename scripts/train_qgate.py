@@ -16,14 +16,20 @@ rows = rows[:600]                                    # statevector kernel: 600 r
 X, y = [r["text"] for r in rows], [int(r["label"]) for r in rows]
 print(f"training on {len(X)} rows, {sum(y)} injections")
 
+# C picked by scripts/tune_qgate.py (5-fold CV on train only, same grid for both); defaults if not tuned yet
+tuned = Path("results/qgate_tuning.json")
+best = json.loads(tuned.read_text()) if tuned.exists() else {}
+c_q, c_r = best.get("qgate", {}).get("best_C", 1.0), best.get("rbf", {}).get("best_C", 1.0)
+print(f"C: qgate={c_q}  rbf={c_r}" + ("" if tuned.exists() else "  (untuned: run python -m scripts.tune_qgate)"))
+
 t = time.time()
-qgate = QGate().fit(X, y)
+qgate = QGate(C=c_q).fit(X, y)
 qgate.save(QGATE_MODEL)
 print(f"Q-Gate trained in {time.time() - t:.0f}s -> {QGATE_MODEL}")
 
 # fairness: the classical twin sees exactly the features Q-Gate's kernel sees
 features = qgate.embedder.transform(X)
-rbf = RBFBaseline().fit(features, y)
+rbf = RBFBaseline(C=c_r).fit(features, y)
 RBF_MODEL.parent.mkdir(parents=True, exist_ok=True)
 joblib.dump({"embedder": qgate.embedder, "rbf": rbf}, RBF_MODEL)
 print(f"RBF baseline trained -> {RBF_MODEL}")

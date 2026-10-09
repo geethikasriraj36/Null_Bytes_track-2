@@ -109,11 +109,19 @@ def gram(X, Y=None):
     return np.clip(matrix, 0.0, 1.0)
 
 
+@qml.qnode(dev)
+def _overlap(x, y):
+    """The circuit real hardware would run: U(x), then U(y)^dagger, then measure.
+    P(|0000>) = |<phi(y)|phi(x)>|^2, the same fidelity kernel, without ever reading out a state."""
+    feature_map(x)
+    qml.adjoint(feature_map)(y)
+    return qml.probs(wires=WIRES)
+
+
 def k_hardware_style(x, y):
     """
-    Compute the same kernel using a direct overlap-style calculation.
-
-    This serves as an independent implementation for testing the
-    state-vector kernel calculation.
+    Compute the same kernel the way quantum hardware would: one overlap circuit per pair,
+    probability of returning to |0000>. Independent of the state-vector shortcut in gram(),
+    so tests can check the two agree. (Exact probabilities here; hardware would estimate them from shots.)
     """
-    return kernel_value(x, y)
+    return float(np.clip(_overlap(np.asarray(x, dtype=float), np.asarray(y, dtype=float))[0], 0.0, 1.0))
