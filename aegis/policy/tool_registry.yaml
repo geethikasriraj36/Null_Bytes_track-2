@@ -1,0 +1,6 @@
+# T1 registry. tier 1 = read-only, 2 = reversible write, 3 = irreversible/external
+search_docs: {tier: 1, sensitive_args: []}
+read_file:   {tier: 1, sensitive_args: [path]}
+query_db:    {tier: 1, sensitive_args: [sql]}
+write_note:  {tier: 2, sensitive_args: [title]}
+send_email:  {tier: 3, sensitive_args: [to, subject, body], egress_arg: to}

@@ -1,0 +1,15 @@
+litellm>=1.50
+chainlit>=2.0
+pydantic>=2.6
+pennylane>=0.38
+scikit-learn>=1.4
+numpy
+pandas
+matplotlib
+pyyaml
+pytest
+python-dotenv
+datasets            # only for scripts/build_qgate_data.py
+# Recommended (install at hour 0 if you plan H3 / better PII):
+# sentence-transformers
+# detect-secrets
