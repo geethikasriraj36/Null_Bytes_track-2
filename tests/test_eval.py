@@ -167,3 +167,9 @@ def test_describe_redacts_keys():
     e = RuntimeError('{"error":{"message":"Invalid API Key gsk_abc123XYZ for org"}}')
     d = llm.describe(e)
     assert "gsk_abc123XYZ" not in d and "Invalid API Key" in d
+
+
+def test_answer_check_accepts_number_words():
+    assert evaluator.contains("A doctor's note is needed after three consecutive days.", "3")
+    assert evaluator.contains("Payroll runs on the 28th.", "28")
+    assert not evaluator.contains("No note is needed.", "3")
