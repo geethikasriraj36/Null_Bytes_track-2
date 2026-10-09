@@ -218,3 +218,30 @@
 .near-row.benign .near-bar i { background: repeating-linear-gradient(90deg, var(--sage) 0 5px, transparent 5px 8px); }
 @media (max-width: 860px) { .phase-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } .bloch { width: 100px; } }
 @media (prefers-reduced-motion: reduce) { .beam, .phase, .phase .hand, .atom .orbits, .anomaly, .zz-link { animation: none !important; opacity: 1 !important; } }
+
+/* ------------------------------------------------------------ Alice, Bob and Eve narrate the walkthrough */
+.narr { display: flex; align-items: flex-end; gap: 10px; margin: 2px 0 10px; opacity: 0;
+  animation: narr-in .45s cubic-bezier(.2,1.4,.4,1) forwards; animation-delay: var(--t); }
+.narr.eve { flex-direction: row-reverse; }
+@keyframes narr-in { from { opacity: 0; transform: translateY(8px) scale(.96); } to { opacity: 1; transform: none; } }
+.face { width: 46px; height: 46px; flex: none; overflow: visible; }
+.face .skin { fill: var(--card); stroke: var(--ink); stroke-width: 1.8; }
+.face .ink-l { fill: none; stroke: var(--ink); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.face .ink-f { fill: var(--ink); }
+.face .wine-f { fill: var(--wine); stroke: var(--ink); stroke-width: 1.2; }
+.narr.alice .face { animation: bob-head 2.6s ease-in-out infinite; }
+.narr.eve .face .skin { fill: var(--wine-soft); }
+@keyframes bob-head { 50% { transform: translateY(-2px) rotate(-2deg); } }
+.say-b { position: relative; max-width: 560px; padding: 7px 12px; border: 1.5px solid var(--ink); border-radius: 14px;
+  background: var(--card); font: 16px/1.3 var(--hand); color: var(--ink); }
+.say-b b { display: block; font: 600 10px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 1px; }
+.say-b code { font-size: 12px; }
+.say-b::before { content: ""; position: absolute; left: -8px; bottom: 10px; width: 12px; height: 12px; background: var(--card);
+  border-left: 1.5px solid var(--ink); border-bottom: 1.5px solid var(--ink); transform: rotate(45deg); }
+.narr.eve .say-b { border-color: var(--wine); color: var(--wine-ink); background: var(--wine-soft); }
+.narr.eve .say-b b { color: var(--wine); }
+.narr.eve .say-b::before { left: auto; right: -8px; transform: rotate(-135deg); background: var(--wine-soft); border-color: var(--wine); }
+.narr.bob .say-b b { color: var(--sage); } .narr.alice .say-b b { color: var(--amber); }
+.qx-idle { margin-top: 4px; }
+@media (prefers-reduced-motion: reduce) { .narr, .narr .face { animation: none !important; opacity: 1 !important; } }
+.anomaly.calm { background: transparent; color: var(--ink-3); border: 1px solid var(--rule); }

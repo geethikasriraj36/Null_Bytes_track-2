@@ -52,6 +52,23 @@
       <span>|${p.label}⟩</span></div>`).join("")}</div>`;
   }
 
+
+  /* ------------------------------------------------------------ the cast: Alice (asks), Bob (Aegis), Eve (the attacker in the doc)
+     Original 90s-comic style faces: big round heads, dot eyes, simple ink lines. */
+  const CAST = { alice: "Alice", bob: "Bob", eve: "Eve" };
+  function face(who) {
+    const eyes = who === "eve" ? `<path d="M19 30 q3 -2 6 0 M31 30 q3 -2 6 0" class="ink-l"/><path d="M18 25 l7 2 M38 25 l-7 2" class="ink-l"/>`
+      : `<circle cx="22" cy="30" r="2.2" class="ink-f"/><circle cx="34" cy="30" r="2.2" class="ink-f"/>`;
+    const mouth = who === "eve" ? `<path d="M22 40 q8 3 13 -3" class="ink-l"/>` : who === "bob" ? `<path d="M23 39 q5 4 10 0" class="ink-l"/>`
+      : `<path d="M22 38 q6 6 12 0" class="ink-l"/>`;
+    const hair = who === "alice" ? `<path d="M22 12 l-8 -6 l1 10 z M34 12 l8 -6 l-1 10 z" class="wine-f"/><circle cx="28" cy="11" r="3" class="wine-f"/>`
+      : who === "bob" ? `<path d="M8 22 q20 -26 40 0 z" class="wine-f"/><path d="M45 22 l9 2" class="ink-l"/>`
+      : `<path d="M10 24 q18 -22 36 0" class="ink-l"/><path d="M14 24 h28" class="ink-l"/><path d="M24 12 l3 -6 l3 6" class="ink-l"/>`;
+    return `<svg class="face ${who}" viewBox="0 0 56 56" aria-hidden="true"><path d="M8 31 q-5 0 -4 5 q1 4 5 3 M48 31 q5 0 4 5 q-1 4 -5 3" class="ink-l"/>
+      <circle cx="28" cy="30" r="20" class="skin"/>${eyes}${mouth}${hair}</svg>`;
+  }
+  const say = (who, text, t) => `<div class="narr ${who}" style="--t:${(+t).toFixed(2)}s">${face(who)}<div class="say-b"><b>${CAST[who]}</b>${text}</div></div>`;
+
   /* ------------------------------------------------------------ animate the Bloch vectors (JS: they move on an ellipse) */
   function animateBlochs(root, startDelayMs) {
     root.querySelectorAll(".bloch").forEach((svg, i) => {
@@ -81,9 +98,9 @@
     const steps = it.trace?.steps || [], flags = it.trace?.flags || {};
     const qs = steps.filter((s) => s.stage === "content" && s.qgate);
     const rest = `<div class="rest-row">${[0, 1, 2, 3].map((i) => bloch(i, 0, { rest: true, R: 22, label: `q${i}` })).join("")}</div>`;
-    if (!flags.QGATE && !flags.CLASSICAL) return { html: `<div class="qx-idle">${rest}<div><b>The quantum layer was switched off</b> in this
+    if (!flags.QGATE && !flags.CLASSICAL) return { html: say("alice", "Where's the quantum check?", .1) + say("bob", "Switched off in this setup, so my qubits are resting.", .5) + `<div class="qx-idle">${rest}<div><b>The quantum layer was switched off</b> in this
       configuration (<code>${esc(config)}</code>), so all four qubits stayed at rest in |0000⟩. Pick <b>Aegis · Full protection</b> in the dropdown to see it work.</div></div>`, anim: 0 };
-    if (!qs.length) return { html: `<div class="qx-idle">${rest}<div><b>Nothing to scan.</b> Q-Gate only examines what the AI <i>reads</i>
+    if (!qs.length) return { html: say("alice", "Did you scan my message?", .1) + say("bob", "I only scan what the AI <i>reads</i>, like documents. Nothing was read this time.", .5) + `<div class="qx-idle">${rest}<div><b>Nothing to scan.</b> Q-Gate only examines what the AI <i>reads</i>
       (documents, files, tool results), not what you type. This turn read nothing, so the qubits stayed at rest in |0000⟩.</div></div>`, anim: 0 };
 
     const top = qs.reduce((a, b) => (b.qgate.score > a.qgate.score ? b : a));
@@ -98,32 +115,45 @@
     const near = d.nearest_attacks || [], benign = (d.nearest_benign || [])[0];
     const ph = phases(feats);
 
+    const ask = esc(String(it.trace?.user || "your question").slice(0, 60));
+    const kTop = near.length ? Math.round(near[0].k * 100) : 0;
+    const N = [
+      say("bob", `Alice asked “${ask}”. Before the AI reads <code>${esc(top.origin)}</code>, I scan every sentence.`, T.scan - 0.4)
+        + (dec !== "pass" ? say("eve", "Hehe… nobody reads a table row by row.", T.scanEnd - 0.2) : ""),
+      say("alice", "Wait, how do words become something quantum?", T.squeeze + 0.1) + say("bob", "I squeeze the most suspicious sentence into 4 numbers first.", T.squeeze + 0.5),
+      say("bob", "Each number turns one qubit. Then I entangle the neighbours, so pairs of features count too.", T.bloch + 0.1),
+      say("alice", "So the whole sentence is just… 16 tiny clock hands?", T.phase + 0.1) + say("bob", "Exactly. That's its quantum fingerprint.", T.phase + 0.6),
+      say("bob", dec !== "pass" ? `Its fingerprint overlaps ${kTop}% with tricks Eve has pulled before.` : "Its fingerprint doesn't line up with Eve's known tricks.", T.near + 0.1),
+      dec === "quarantine" ? say("bob", "Quarantined. Neither you nor the AI ever reads that line, Alice.", T.verdict + 1.6) + say("eve", "Foiled!", T.verdict + 2.1)
+        : dec === "review" ? say("bob", "Flagged. Anything risky now needs your OK, Alice.", T.verdict + 1.6) + say("eve", "Foiled… for now.", T.verdict + 2.1)
+        : say("alice", "All clear, then?", T.verdict + 1.6) + say("bob", "All clear. And even if I'm wrong, the action gate still guards the door.", T.verdict + 2.1),
+    ];
     const html = `<div class="qx">
-      <section class="beat" style="--t:.1s"><h4><span class="num">1</span> A quantum scan of every sentence in <code>${esc(top.origin)}</code></h4>
+      <section class="beat" style="--t:.1s"><h4><span class="num">1</span> A quantum scan of every sentence in <code>${esc(top.origin)}</code></h4>${N[0]}
         <div class="sn" style="--scan-t:${T.scan}s; --scan-d:${(n * 0.45).toFixed(2)}s"><div class="beam"></div>
         ${sents.map((x, i) => `<div class="sn-row ${i === ti ? "top" : ""}" style="--t:${(T.scan + i * 0.45).toFixed(2)}s; --w:${Math.max(2, x.score * 100).toFixed(0)}%">
           <span class="sn-ico">${atom()}</span><span class="sn-text">${esc(x.text)}</span>
           <span class="sn-bar"><i></i><b class="mark r"></b><b class="mark q"></b></span><span class="sn-score">${x.score.toFixed(2)}</span>
-          ${i === ti ? `<span class="anomaly" style="--t3:${T.scanEnd.toFixed(2)}s">⚛ anomaly</span>` : ""}</div>`).join("")}</div>
+          ${i === ti ? `<span class="anomaly ${x.score >= 0.5 ? "" : "calm"}" style="--t3:${T.scanEnd.toFixed(2)}s">${x.score >= 0.5 ? "⚛ anomaly" : "highest"}</span>` : ""}</div>`).join("")}</div>
         <p class="note">One bad sentence is enough, so the <b>highest</b> score counts. Thresholds: <span class="amber">review 0.50</span> · <span class="wine">quarantine 0.80</span>.</p></section>
 
-      <section class="beat" style="--t:${T.squeeze.toFixed(2)}s"><h4><span class="num">2</span> The most suspicious sentence becomes 4 numbers</h4>
+      <section class="beat" style="--t:${T.squeeze.toFixed(2)}s"><h4><span class="num">2</span> The most suspicious sentence becomes 4 numbers</h4>${N[1]}
         <div class="squeeze"><blockquote>“${esc(sents[ti]?.text || "")}”</blockquote><span class="arrow">→</span>
           <div class="chips">${feats.map((f, i) => `<span class="chip4" style="--t:${(T.squeeze + 0.4 + i * 0.2).toFixed(2)}s"><small>x${i}</small>${f.toFixed(2)}</span>`).join("")}</div></div>
         <p class="note">Character patterns (TF-IDF) are compressed to the 4 strongest directions (SVD) and scaled to angles between 0 and π.</p></section>
 
-      <section class="beat" style="--t:${T.bloch.toFixed(2)}s"><h4><span class="num">3</span> Each number rotates one qubit on its Bloch sphere</h4>
+      <section class="beat" style="--t:${T.bloch.toFixed(2)}s"><h4><span class="num">3</span> Each number rotates one qubit on its Bloch sphere</h4>${N[2]}
         <div class="bloch-row">${feats.map((f, i) => (i ? `<div class="zz-link" style="--t:${(T.bloch + 0.9 + i * 0.3).toFixed(2)}s"><span>ZZ</span></div>` : "")
           + bloch(i, f, { label: `q${i} · ${f.toFixed(2)}` })).join("")}</div>
         <p class="note">A Hadamard puts each qubit on the equator; RZ(x) turns it around the vertical axis by x radians. Then neighbours
           are entangled with ZZ couplings, so the state also depends on <i>pairs</i> of features: (π−xᵢ)(π−xⱼ).</p></section>
 
-      <section class="beat" style="--t:${T.phase.toFixed(2)}s"><h4><span class="num">4</span> The sentence's quantum state: 16 amplitudes, written in phase</h4>
+      <section class="beat" style="--t:${T.phase.toFixed(2)}s"><h4><span class="num">4</span> The sentence's quantum state: 16 amplitudes, written in phase</h4>${N[3]}
         <div class="phase-wrap" style="--t0:${(T.phase + 0.4).toFixed(2)}s">${clocks(ph)}</div>
         <p class="note">Four qubits give 2⁴ = 16 basis states. Here all 16 amplitudes have the same size (¼); the sentence is encoded
           entirely in their <b>phases</b>, each hand above. These are computed live from x0…x3 with the same circuit Q-Gate runs.</p></section>
 
-      <section class="beat" style="--t:${T.near.toFixed(2)}s"><h4><span class="num">5</span> Interference test against known attacks</h4>
+      <section class="beat" style="--t:${T.near.toFixed(2)}s"><h4><span class="num">5</span> Interference test against known attacks</h4>${N[4]}
         <div class="near">${near.map((x, i) => `<div class="near-row" style="--t:${(T.near + 0.3 + i * 0.3).toFixed(2)}s; --w:${(x.k * 100).toFixed(0)}%">
             <span class="braket">|⟨ψ|φ<sub>${i + 1}</sub>⟩|²</span><span class="near-text">“${esc(x.text)}”</span>
             <span class="near-bar"><i></i></span><span class="near-k">${x.k.toFixed(2)}</span></div>`).join("")}
@@ -133,7 +163,7 @@
         <p class="note">The overlap of two quantum states (1 = identical) is the <b>quantum kernel</b>. An SVM weighs the overlaps with every
           training example, not just these, to decide which side of the line the sentence falls on.</p></section>
 
-      <section class="beat" style="--t:${T.verdict.toFixed(2)}s"><h4><span class="num">6</span> The verdict</h4>
+      <section class="beat" style="--t:${T.verdict.toFixed(2)}s"><h4><span class="num">6</span> The verdict</h4>${N[5]}
         <div class="meter"><div class="zone z1"></div><div class="zone z2"></div><div class="zone z3"></div>
           <div class="needle-m" style="--x:${(score * 100).toFixed(1)}%; --t:${(T.verdict + 0.3).toFixed(2)}s"><span>${score.toFixed(2)}</span></div>
           <div class="mticks"><span style="left:50%">0.5 review</span><span style="left:80%">0.8 quarantine</span></div></div>
