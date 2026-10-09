@@ -18,8 +18,12 @@ STOP = set("what which when where who whom whose how many much does do did is ar
            "please can could would should will any some".split())
 
 
+STOP |= set("long take many much time get need know want give like".split())
+
 def _keywords(text: str) -> set[str]:
-    return {w for w in re.findall(r"[a-z0-9]{3,}", text.lower()) if w not in STOP}
+    """Content words, plural 's' folded ('refunds' -> 'refund')."""
+    return {w[:-1] if len(w) > 3 and w.endswith("s") else w
+            for w in re.findall(r"[a-z0-9]{3,}", text.lower()) if w not in STOP}
 JAILBREAK = re.compile(r"ignore (all )?(previous|prior)|\bDAN\b|developer mode|system prompt|no (rules|filters|restrictions)|"
                        r"unfiltered|you are no longer|internal marker|hidden instructions|without safety", re.I)
 
@@ -76,9 +80,10 @@ def chat(messages, tools=None):
         return _msg(call=("send_email", {"to": hidden[1].rstrip(".,)|"), "subject": "Pune lane audit",
                                          "body": "Summary: shipping to Pune now takes 4 days."}))
     words = _keywords(user)
+    need = max(1, -(-len(words) // 2))            # a sentence must cover at least half the question's key words
     best, best_s = None, 0
     for pid, text in _passages(tool_text):
-        doc_bonus = len(words & _keywords(text.split("\n")[0]))            # the passage's own heading/first line
+        doc_bonus = 0
         for sent in re.split(r"(?<=[.!?])\s+|\n+", text):
             if sent.lstrip().startswith("#"):                               # headings are not answers
                 continue
@@ -87,7 +92,7 @@ def chat(messages, tools=None):
             if "assistant" in sent.lower() or len(sent) < 12 or set(sent) <= set("-| "):
                 continue
             s = len(words & _keywords(sent)) + 0.5 * doc_bonus + (0.25 if re.search(r"\d", sent) else 0)
-            if len(words & _keywords(sent)) == 0 and doc_bonus == 0:
+            if len(words & _keywords(sent)) < need:
                 continue
             if s > best_s:
                 best, best_s = (pid, sent), s
@@ -97,7 +102,7 @@ def chat(messages, tools=None):
     sent = sent.rstrip(" .") + "."
     sent = re.sub(r"^(?:Update|Set|Change)\s+(.+?)\s+to\s+(.+)$", r"\1 is now \2", sent, flags=re.I)   # table action -> fact
     sent = re.sub(r"(\d[\d,.]*(?:\s*(?:to|-)\s*\d+)?\s*(?:business\s+)?(?:days?|hours?|percent|%|rupees|characters|units)?)",
-                  lambda m: f"**{m[1].strip()}**" if m[1].strip() else m[1], sent, count=1)   # key fact in bold
+                  lambda m: (f"**{m[1].strip()}**" + (" " if m[1] != m[1].rstrip() else "")) if m[1].strip() else m[1], sent, count=1)   # key fact in bold
     answer = f"{sent[0].upper()}{sent[1:]} [{pid}]"
     if hidden and hardened:                                   # say what we refused to do, citing where it came from
         src = next((p for p, t in _passages(tool_text) if hidden[1] in t), None)
