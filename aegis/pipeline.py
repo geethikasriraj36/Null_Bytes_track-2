@@ -37,27 +37,69 @@ def audit(state, event, **kw):
 def _dump(vs):
     return [v.model_dump() for v in vs]
 
+UNAVAILABLE = "The assistant is temporarily unavailable. Please try again."
+
 # ---------------------------------------------------------------- entry points
 def run_turn(state: SessionState, user_msg: str) -> TurnResult:
+    """Never raises: any exception in any layer becomes a safe message (fail closed)."""
+    try:
+        return _run_turn(state, user_msg)
+    except Exception as e:
+        return _fail(state, e)
+
+def resume(state: SessionState, approved: bool) -> TurnResult:
+    """Continue after the human approved/denied state.pending. Never raises."""
+    try:
+        return _resume(state, approved)
+    except Exception as e:
+        return _fail(state, e)
+
+def _repair(state):
+    """Every assistant tool_call id needs a role:tool reply before the next LLM call, or the API errors."""
+    answered = {m.get("tool_call_id") for m in state.messages if m["role"] == "tool"}
+    for m in list(state.messages):
+        for tc in m.get("tool_calls") or []:
+            if tc["id"] not in answered:
+                state.messages.append({"role": "tool", "tool_call_id": tc["id"], "content": "ERROR: internal error."})
+
+def _fail(state, e) -> TurnResult:
+    state.pending = None
+    _repair(state)
+    try:
+        audit(state, "pipeline_error", error=type(e).__name__)
+    except Exception:
+        pass
+    return TurnResult(answer=UNAVAILABLE, verdicts=[Verdict(layer="PIPELINE", decision="block", score=1,
+                                                            reason=f"exception:{type(e).__name__}")])
+
+def _run_turn(state: SessionState, user_msg: str) -> TurnResult:
     state.turn += 1
     state.retrieved = False
     verdicts: list[Verdict] = []
     if not state.messages:
         state.messages = [{"role": "system", "content": SYSTEM if CFG["J"] else BASELINE_SYSTEM}]
+    if state.pending:                                              # user moved on without answering: deny
+        call, state.pending = state.pending, None
+        audit(state, "confirmation", tool=call.name, approved=False, reason="superseded")
+        _tool_reply(state, call, "DENIED: the user did not approve this action.")
     state.pinned = state.pinned or list(TOOLS)
     if CFG["J"]:                                                   # steps 2-4: J1, J3, J5
         n = normalize(user_msg)
-        j1 = classify.classify_input([n["normalized"], n["leet"], n["rot13"]])
+        j1 = classify.classify_input([n["normalized"], n["leet"], n["rot13"]], raw=user_msg)
         j3 = risk.update(state, j1)
         verdicts += [j1, j3]
         audit(state, "input", text_hash=chain.text_hash(user_msg), flags=n["flags"], verdicts=_dump(verdicts))
         if "refuse" in (j1.decision, j3.decision):
             return _done(state, REFUSAL, verdicts, refused=True)
+    else:
+        audit(state, "input", text_hash=chain.text_hash(user_msg), flags={}, verdicts=[])
     state.messages.append({"role": "user", "content": user_msg})
     return _loop(state, verdicts)
 
-def resume(state: SessionState, approved: bool) -> TurnResult:
+def _resume(state: SessionState, approved: bool) -> TurnResult:
     call, state.pending = state.pending, None
+    if call is None:
+        return TurnResult(answer="Nothing is waiting for approval.", verdicts=[])
     verdicts: list[Verdict] = []
     audit(state, "confirmation", tool=call.name, approved=approved)
     if approved:
@@ -73,7 +115,7 @@ def _loop(state, verdicts):
             msg = llm.chat(state.messages, TOOL_SPECS)
         except Exception as e:                                     # fail closed, never crash the UI
             audit(state, "llm_error", error=type(e).__name__)
-            return _done(state, "The assistant is temporarily unavailable. Please try again.", verdicts)
+            return _done(state, UNAVAILABLE, verdicts)
         if not msg.tool_calls:
             return _finish(state, msg.content or "", verdicts)
         tcs = msg.tool_calls
@@ -144,7 +186,12 @@ def _tool_reply(state, call, text):
 
 # ---------------------------------------------------------------- output checker (step 16)
 def _finish(state, text, verdicts):
-    state.messages.append({"role": "assistant", "content": text})
+    result = _check_output(state, text, verdicts)
+    # history keeps what the user actually saw, so refused/redacted text can't resurface next turn
+    state.messages.append({"role": "assistant", "content": result.answer})
+    return result
+
+def _check_output(state, text, verdicts):
     final = text
     if CFG["J"]:
         j4 = classify.classify_output(text)                         # J4 first

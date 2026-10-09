@@ -7,3 +7,5 @@ results/runs.csv
 data/outbox.jsonl
 data/notes.jsonl
 .chainlit/
+data/sim.db
+data/files/
