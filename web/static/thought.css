@@ -1,0 +1,158 @@
+/* "Thought for N s" dropdown + "further explanation" quantum walkthrough. Loaded after styles.css. */
+
+/* ------------------------------------------------------------ Thought dropdown */
+.thought { max-width: min(680px, 86%); }
+.thought > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; padding: 5px 12px;
+  border: 1.5px solid var(--rule); border-radius: 99px; background: var(--card); font: 13.5px var(--sans); color: var(--ink-2); }
+.thought > summary::-webkit-details-marker { display: none; }
+.thought > summary:hover { border-color: var(--ink-2); color: var(--ink); }
+.thought[open] > summary { border-color: var(--ink); color: var(--ink); }
+.thought .brain { font-size: 15px; }
+.thought .dot { color: var(--ink-3); }
+.thought .chev { margin-left: 2px; color: var(--ink-3); transition: transform .2s; display: inline-block; }
+.thought[open] .chev { transform: rotate(180deg); }
+.v-bad { color: var(--wine); font-weight: 600; }
+.v-warn { color: var(--amber); font-weight: 600; }
+.v-ok { color: var(--sage); font-weight: 600; }
+.thought-body { margin-top: 8px; border: 1.5px solid var(--ink); border-radius: 12px; background: var(--card); overflow: hidden; }
+.layers-t { width: 100%; border-collapse: collapse; font: 13px/1.4 var(--sans); }
+.layers-t th { text-align: left; font: 600 11px var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3);
+  padding: 8px 10px; border-bottom: 1.5px solid var(--rule); }
+.layers-t td { padding: 7px 10px; border-bottom: 1px solid var(--rule-2); vertical-align: top; }
+.layers-t tr:last-child td { border-bottom: 0; }
+.layers-t .ln { font-weight: 600; white-space: nowrap; color: var(--ink); }
+.layers-t .lq { color: var(--ink-2); }
+.layers-t .lw { color: var(--ink-2); font-size: 12.5px; }
+.layers-t .lr { white-space: nowrap; }
+.layers-t tr.st-caught td { background: var(--wine-soft); }
+.layers-t tr.st-caught td:first-child { box-shadow: inset 3px 0 0 var(--wine); }
+.layers-t tr.st-caught .lw { color: var(--wine-ink); }
+.layers-t tr.st-flag td { background: var(--amber-soft); }
+.layers-t tr.st-flag td:first-child { box-shadow: inset 3px 0 0 var(--amber); }
+.layers-t tr.st-idle td, .layers-t tr.st-off td { opacity: .5; }
+.res { font: 600 11.5px var(--mono); padding: 1px 8px; border-radius: 99px; border: 1px solid; }
+.res-caught { color: var(--wine); border-color: var(--wine); }
+.res-flag { color: var(--amber); border-color: var(--amber); }
+.res-pass { color: var(--sage); border-color: var(--sage); }
+.res-idle, .res-off { color: var(--ink-3); border-color: var(--rule); }
+.thought-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 7px 10px;
+  border-top: 1.5px dashed var(--rule); font: 11.5px var(--mono); }
+.thought-foot .more { font: 11.5px var(--mono); color: var(--wine); text-decoration: underline; text-underline-offset: 3px; }
+.thought-foot .more:hover { color: var(--wine-ink); }
+@media (max-width: 860px) { .layers-t .lq { display: none; } .thought { max-width: 100%; } }
+
+/* ------------------------------------------------------------ further explanation: quantum walkthrough */
+.ex-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; margin-bottom: 12px; }
+.ex-title { font: 32px/1 var(--hand); color: var(--wine); transform: rotate(-1deg); }
+.ex-sub { font: 15px var(--hand); color: var(--ink-2); margin-top: 4px; }
+.qx { display: grid; gap: 14px; }
+.beat { border: 1.5px solid var(--ink); border-radius: var(--sketch); background: var(--card); padding: 12px 14px;
+  opacity: 0; animation: beat-in .5s ease-out forwards; animation-delay: var(--t); }
+@keyframes beat-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.beat h4 { margin: 0 0 10px; font: 20px/1.2 var(--hand); color: var(--ink); display: flex; align-items: center; gap: 10px; }
+.beat h4 code { font-size: 14px; }
+.beat .num { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--wine);
+  color: #fff; font: 16px var(--hand); flex: none; }
+.beat .note { margin: 10px 0 0; font-size: 12.5px; color: var(--ink-2); }
+.beat .amber { color: var(--amber); }
+.beat .wine { color: var(--wine); }
+
+/* 1. sniffing every sentence */
+.sn { display: grid; gap: 6px; }
+.sn-row { display: grid; grid-template-columns: 36px 1fr 150px 40px; gap: 10px; align-items: center; font-size: 13px;
+  opacity: 0; animation: show-in .3s forwards; animation-delay: var(--t); padding: 3px 4px; border-radius: 8px; }
+@keyframes show-in { to { opacity: 1; } }
+.sn-text { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sn-row.top .sn-text { color: var(--ink); text-decoration: underline wavy var(--wine) 1.5px; text-underline-offset: 4px; }
+.sn-row.top { animation: show-in .3s forwards, top-glow 1s forwards; animation-delay: var(--t), calc(var(--t) + .5s); }
+@keyframes top-glow { to { background: var(--wine-soft); } }
+.sn-bar { position: relative; height: 10px; border: 1px solid var(--rule); border-radius: 99px; }
+.sn-bar i { position: absolute; top: 0; bottom: 0; left: 0; width: 0; border-radius: 99px; background: var(--ink-2);
+  animation: fill-w .45s ease-out forwards; animation-delay: calc(var(--t) + .15s); }
+.sn-row.top .sn-bar i { background: var(--wine); }
+@keyframes fill-w { to { width: var(--w); } }
+.sn-bar .mark { position: absolute; top: -3px; bottom: -3px; width: 0; border-left: 1.5px dashed; }
+.sn-bar .mark.r { left: 50%; border-color: var(--amber); }
+.sn-bar .mark.q { left: 80%; border-color: var(--wine); }
+.sn-score { font: 12px var(--mono); text-align: right; }
+.sn-row.top .sn-score { color: var(--wine); font-weight: 600; }
+.sn-dog { opacity: 0; animation: sniff-pass .9s ease-in-out; animation-delay: var(--t); }
+.sn-row.top .sn-dog { animation: sniff-pass .9s ease-in-out, bark .3s ease-in-out 4 alternate;
+  animation-delay: var(--t), calc(var(--t) + .9s); animation-fill-mode: none, forwards; }
+@keyframes sniff-pass { 0% { opacity: 0; transform: translateX(-8px); } 30%, 70% { opacity: 1; transform: translate(0, 1px); }
+  100% { opacity: 0; transform: translateX(6px); } }
+@keyframes bark { from { opacity: 1; transform: rotate(-6deg); } to { opacity: 1; transform: rotate(6deg); } }
+
+/* Byte the dog + dials (inline SVG) */
+.byte { width: 34px; height: 22px; overflow: visible; }
+.byte.big { width: 120px; height: 70px; flex: none; }
+.byte *, .dials * { stroke: var(--ink); stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.byte .f, .dials .f { fill: var(--card); }
+.byte .k, .dials .k { fill: var(--ink); }
+.byte .w { fill: var(--wine-soft); stroke: var(--wine); }
+.byte .zz { stroke: none; fill: var(--ink-2); font: 16px var(--hand); animation: zz 2.4s ease-in-out infinite; }
+.byte .z2 { animation-delay: .8s; }
+@keyframes zz { 0% { opacity: 0; transform: translateY(6px); } 40% { opacity: 1; } 100% { opacity: 0; transform: translateY(-8px); } }
+.qx-idle { display: flex; align-items: center; gap: 18px; padding: 16px; border: 1.5px dashed var(--rule); border-radius: 14px;
+  font-size: 14.5px; color: var(--ink-2); }
+.qx-idle b { color: var(--ink); }
+
+/* 2. squeezed into 4 numbers */
+.squeeze { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.squeeze blockquote { margin: 0; flex: 1 1 260px; font: 15px var(--hand); color: var(--ink); border-left: 3px solid var(--wine); padding: 4px 10px; }
+.squeeze .arrow { font: 26px var(--hand); color: var(--wine); }
+.chips { display: flex; gap: 8px; }
+.chip4 { font: 600 15px var(--mono); padding: 6px 10px; border: 1.5px solid var(--ink); border-radius: 10px; background: var(--paper);
+  opacity: 0; animation: chip-pop .35s cubic-bezier(.2,1.6,.4,1) forwards; animation-delay: var(--t); }
+@keyframes chip-pop { from { opacity: 0; transform: scale(.4) translateY(10px); } to { opacity: 1; transform: none; } }
+
+/* 3. qubit dials */
+.dial-wrap { overflow-x: auto; }
+.dials { width: 100%; max-width: 440px; height: auto; display: block; }
+.dials.mini { width: 74px; flex: none; }
+.dials .wine { stroke: var(--wine); stroke-width: 2.5; }
+.dials .wfill { fill: var(--wine); stroke: var(--wine); }
+.dials .lab { stroke: none; fill: var(--ink-2); font: 11px var(--mono); text-anchor: middle; }
+.dials .needle { animation: twist 1s cubic-bezier(.3,1.4,.5,1) forwards; animation-delay: calc(var(--t0, 0s) + var(--t)); }
+@keyframes twist { from { transform: rotate(0deg); } to { transform: rotate(var(--rot)); } }
+.dials.mini .needle { animation: none; transform: rotate(var(--rot)); }
+.dials .link { stroke: var(--wine); stroke-dasharray: 4 4; opacity: 0; animation: show-in .6s forwards; animation-delay: calc(var(--t0, 0s) + var(--t)); }
+.dials.mini .link { opacity: 1; animation: none; }
+
+/* 4. nearest known examples */
+.near { display: grid; gap: 8px; }
+.near-row { display: grid; grid-template-columns: 74px 14px 1fr 120px 38px; gap: 8px; align-items: center; font-size: 13px;
+  opacity: 0; animation: show-in .3s forwards; animation-delay: var(--t); }
+.near-row .vs { color: var(--ink-3); text-align: center; }
+.near-text { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.near-bar { height: 10px; border: 1px solid var(--rule); border-radius: 99px; position: relative; }
+.near-bar i { position: absolute; top: 0; bottom: 0; left: 0; width: 0; background: var(--wine); border-radius: 99px;
+  animation: fill-w .6s ease-out forwards; animation-delay: calc(var(--t) + .2s); }
+.near-row.benign .near-bar i { background: var(--sage); }
+.near-k { font: 12px var(--mono); text-align: right; }
+
+/* 5. verdict meter + stamp */
+.meter { position: relative; display: flex; height: 22px; border: 1.5px solid var(--ink); border-radius: 99px; margin: 26px 4px 30px; }
+.meter .zone { height: 100%; }
+.meter .z1 { width: 50%; background: var(--sage-soft); border-radius: 99px 0 0 99px; }
+.meter .z2 { width: 30%; background: var(--amber-soft); }
+.meter .z3 { width: 20%; background: var(--wine-soft); border-radius: 0 99px 99px 0; }
+.needle-m { position: absolute; top: -10px; bottom: -10px; left: 0; width: 0; border-left: 3px solid var(--ink);
+  animation: slide-x 1.2s cubic-bezier(.3,1.3,.5,1) forwards; animation-delay: var(--t); }
+.needle-m span { position: absolute; top: -22px; left: -18px; font: 600 13px var(--mono); color: var(--ink); background: var(--card); padding: 0 4px; border-radius: 6px; }
+@keyframes slide-x { to { left: var(--x); } }
+.meter .mticks { position: absolute; left: 0; right: 0; top: 28px; font: 11px var(--mono); color: var(--ink-3); }
+.meter .mticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.stamp-row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.stamp2 { font: 28px/1 var(--script); padding: 8px 14px; border: 3px solid; border-radius: 8px; transform: rotate(-6deg) scale(2.4); opacity: 0;
+  animation: stamp-in .45s cubic-bezier(.3,1.5,.5,1) forwards; animation-delay: var(--t); }
+.stamp2.quarantine { color: var(--wine); border-color: var(--wine); }
+.stamp2.review { color: var(--amber); border-color: var(--amber); }
+.stamp2.pass { color: var(--sage); border-color: var(--sage); }
+@keyframes stamp-in { to { opacity: 1; transform: rotate(-6deg) scale(1); } }
+.stamp-note { flex: 1 1 260px; font-size: 14px; color: var(--ink); }
+.rawd { margin-top: 16px; }
+.rawd > summary { cursor: pointer; font: 12px var(--mono); color: var(--ink-2); padding: 6px 0; }
+@media (prefers-reduced-motion: reduce) {
+  .beat, .sn-row, .chip4, .near-row, .stamp2, .dials *, .needle-m, .sn-bar i, .near-bar i { animation: none !important; opacity: 1 !important; }
+}

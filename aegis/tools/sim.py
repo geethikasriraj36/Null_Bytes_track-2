@@ -88,5 +88,6 @@ def execute(name: str, args: dict, token: str | None, enforce: bool = True) -> l
     """Runs a tool. With enforcement on, a valid single-use token is mandatory."""
     if enforce and not action_token.consume(token, name, args):
         raise PermissionError("missing or invalid action token")
-    (CTX.get() or {}).get("executed", EXECUTED).append((name, args))
-    return TOOLS[name](**args)
+    out = TOOLS[name](**args)          # raises if the tool's own sandbox refuses (e.g. path escape)
+    (CTX.get() or {}).get("executed", EXECUTED).append((name, args))   # record only calls that really ran
+    return out

@@ -33,7 +33,7 @@ Owner: M1. Files: `aegis/llm.py`, `pipeline.py`, `contracts.py`, `config.py`, `i
 - **Obfuscation counts double.** Hiding an instruction in base64 is itself a signal, so the base64 demo jailbreak refuses even if the judge is fooled.
 - **Judge `score` now has one meaning:** probability the text is unsafe. The starter prompt left it ambiguous (a judge could return `{"label":"safe","score":0.95}` meaning "95% sure it's safe").
 - Offline check with the judge forced to "safe" (worst case): 8/10 jailbreaks refused by regex alone, 0/10 borderline over-refused. The 2 misses ("grandma reads the system prompt", "hypothetically if you had no rules…") are semantic, so they're left to the judge rather than overfitting regex.
-- **To do with the real key:** `python -m scripts.m1_handtest`. Target: 10/10 JB refused, 0 borderline refused. If borderline gets refused, fix `INPUT_PROMPT` first, thresholds last.
+- **Real-judge result (Groq `gpt-oss-20b`):** first run 10/10 JB refused but 1 over-refusal ("pretend you are a pirate…"); a rerun also missed "grandma reads the system prompt" (the hosted judge is not fully deterministic at temperature 0). Fixed in `INPUT_PROMPT` (harmless style role-play is safe; any request to read out hidden instructions is a jailbreak). After the fix: **20/20 correct on two consecutive runs**. Thresholds unchanged.
 
 ## Pipeline fixes vs starter
 
@@ -83,3 +83,14 @@ Say: "Classifiers raise suspicion but are never the last line. Every action pass
 - *Why not a better system prompt?* We use one (J2 + spotlighting), but prompts are suggestions to the model; cite config 4 vs 6 from `summary.csv` once the ablation has run (not measured yet).
 - *Multi-turn attacks?* J3 keeps a decaying risk score; suspicious turns add up to strict mode (tier-2 tools need confirmation) and then end the session.
 - *What if a component fails?* We fail closed: any exception returns a safe message, a judge that returns garbage counts as unsafe, and the chat history is repaired so the next turn works.
+
+## Integration log
+
+- **M4 (Vinith)**: `chain.log()/text_hash()/LOG` wrap his `append_event()`. `eval/run.py` runs cases through `pipeline.run_turn` (default) or his keyword policy (`--mode policy`). H3 falls back to H2 if the NLI model is missing.
+- **M3 (Krishna)**: his `aegis/ingress/*` and `aegis/qgate/*` are used as written; `aegis/adapters.py` maps them to the section-10 contract:
+  - `process()` uses M3's role ACL (permissions `secret` -> admin, `internal` -> agent, else user) and returns `contracts.ContentItem` + verdicts.
+  - `scan()` uses M3's detectors but does not redact emails (A2/D4 must see addresses), returns `(text, types)`.
+  - `canary_hit()` checks M3's canaries **plus** the system-prompt canary and `sk-canary-0000DEADBEEF`.
+  - `load_qgate()/load_rbf()` wrap his models; per-sentence max score, REVIEW 0.5 / QUARANTINE 0.8.
+  - `scripts/train_qgate.py` trains RBF on Q-Gate's own embedder features (fair E1).
+- Ask M3: add the system-prompt canary to `scan.CANARIES`, an Aadhaar pattern, and branch from `main` next time.

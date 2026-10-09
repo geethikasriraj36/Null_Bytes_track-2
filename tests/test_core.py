@@ -7,7 +7,7 @@ from aegis.toolsafety.gate import check_call, decide
 from aegis.line1 import action_token
 from aegis.line1.taint import mark
 from aegis.inputguard.normalize import normalize
-from aegis.ingress.scan import scan, canary_hit
+from aegis.adapters import scan, canary_hit
 from aegis.audit import chain
 
 PINNED = ["search_docs", "read_file", "query_db", "write_note", "send_email"]
