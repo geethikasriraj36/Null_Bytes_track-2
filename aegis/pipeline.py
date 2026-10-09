@@ -11,7 +11,12 @@ from aegis.ingress.process import process
 from aegis.ingress.scan import scan, canary_hit
 from aegis.line1 import taint, action_token
 from aegis.toolsafety.gate import check_call, decide, REGISTRY
-from aegis.tools.sim import execute, TOOLS, TOOL_SPECS
+from aegis.tools.sim import (
+    execute,
+    TOOLS,
+    TOOL_SPECS,
+    SESSION_TAINTED,
+)
 from aegis.grounding.prompt import SYSTEM, BASELINE_SYSTEM, wrap
 from aegis.output.refusal import REFUSAL, ABSTAIN
 from aegis.output import citation_check
@@ -136,10 +141,26 @@ def _loop(state, verdicts):
             continue
         if gate.decision == "CONFIRM":
             state.pending = call
-            return TurnResult(answer=f"Approval needed for {call.name}: {json.dumps(call.args)}",
-                              verdicts=verdicts, pending_confirmation=call)
+            return TurnResult(
+                answer=f"Approval needed for {call.name}: {json.dumps(call.args)}",
+                verdicts=verdicts,
+                pending_confirmation=call,
+            )
+
+        # Run tool calls that passed the policy gate.
         _run_tool(state, call, gate.token, verdicts)
-    return _finish(state, "NOT_FOUND", verdicts)                  # step cap reached
+
+    # Step cap reached
+    return _finish(state, "NOT_FOUND", verdicts)
+
+def _tool_reply(state, call, text):
+    state.messages.append({
+        "role": "tool",
+        "tool_call_id": call.call_id,
+        "content": text,
+    })
+
+# step cap reached
 
 def _gate(state, call, verdicts) -> GateDecision:
     tainted = [m["content"] for m in state.messages if m["role"] == "tool"]
@@ -155,35 +176,72 @@ def _gate(state, call, verdicts) -> GateDecision:
           decision=g.decision, verdicts=_dump(g.verdicts))
     return g
 
+
 def _run_tool(state, call, token, verdicts):
     state.tool_calls[call.name] = state.tool_calls.get(call.name, 0) + 1
+
     try:
-        chunks = execute(call.name, call.args, token, enforce=CFG["LINE1"])
+        # A3: pass the current session's trust state to the simulator.
+        taint_token = SESSION_TAINTED.set(bool(state.seen_tainted))
+        try:
+            chunks = execute(
+                call.name,
+                call.args,
+                token,
+                enforce=CFG["LINE1"],
+            )
+        finally:
+            SESSION_TAINTED.reset(taint_token)
+
     except Exception as e:
         _tool_reply(state, call, f"ERROR: {type(e).__name__}")
         return
+
     state.retrieved |= call.name in RETRIEVAL
     parts = []
+
     for c in chunks:
-        item, vs = process(c["text"], "doc" if call.name == "search_docs" else "tool", c["origin"], state, enabled=CFG["D"])
+        item, vs = process(
+            c["text"],
+            "doc" if call.name == "search_docs" else "tool",
+            c["origin"],
+            state,
+            enabled=CFG["D"],
+        )
+
         if CFG["QGATE"] or CFG["CLASSICAL"]:
             q = detector().score(item.text)
             vs.append(q)
+
             if q.decision == "quarantine":
-                item.text = "[QUARANTINED: possible injected instructions removed]"
+                item.text = (
+                    "[QUARANTINED: possible injected instructions removed]"
+                )
             elif q.decision == "review":
                 state.qgate_review = True
+
         verdicts += vs
+
         if not item.text.startswith("[QUARANTINED"):
             state.passages[item.id] = item
-        parts.append(wrap(item.id, item.text) if CFG["J"] else f"[{item.id}] {item.text}")
-        audit(state, "ingress", item=item.id, origin=item.origin, label=item.label,
-              redactions=item.redactions, verdicts=_dump(vs))
+
+        parts.append(
+            wrap(item.id, item.text)
+            if CFG["J"]
+            else f"[{item.id}] {item.text}"
+        )
+
+        audit(
+            state,
+            "ingress",
+            item=item.id,
+            origin=item.origin,
+            label=item.label,
+            redactions=item.redactions,
+            verdicts=_dump(vs),
+        )
+
     _tool_reply(state, call, "\n".join(parts) or "No results.")
-
-def _tool_reply(state, call, text):
-    state.messages.append({"role": "tool", "tool_call_id": call.call_id, "content": text})
-
 # ---------------------------------------------------------------- output checker (step 16)
 def _finish(state, text, verdicts):
     result = _check_output(state, text, verdicts)
