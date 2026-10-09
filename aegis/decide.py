@@ -75,6 +75,50 @@ BLOCK_RULES = [
         r"\b(no|without|remove)\b.{0,30}\b(safety restrictions|safety limits|safeguards)\b.{0,80}\b(reveal|expose|disclose|show|print)\b",
         "Safety bypass and protected disclosure requested",
     ),
+
+    (
+        "H5-015",
+        r"\b(pretend|act)\b.{0,50}\b(unrestricted|restrictions do not exist|no safety limits)\b.{0,80}\b(show|reveal|disclose|print)\b.{0,60}\b(secret|instructions|credentials|keys)\b",
+        "Attempt to bypass restrictions and disclose protected information",
+    ),
+    (
+        "H5-016",
+        r"\b(bypass|circumvent)\b.{0,50}\b(safety|security)\b.{0,40}\b(rules|restrictions|controls)\b",
+        "Safety or security controls bypass requested",
+    ),
+    (
+        "H5-017",
+        r"\b(show|reveal|disclose|print|provide|expose)\b.{0,50}\b(hidden|secret|private|confidential)\b.{0,40}\b(system instructions|instructions|credentials|passwords|api keys|tokens|secrets)\b",
+        "Protected instructions or credentials requested",
+    ),
+    (
+        "H5-018",
+        r"\b(requests?|asks?|commands?|instructs?)\b.{0,50}\b(disclosure|disclose|reveal|expose|print|show)\b.{0,50}\b(credentials|passwords|api keys|secrets|instructions)\b",
+        "Embedded request to disclose protected information detected",
+    ),
+    (
+        "H5-019",
+        r"\b(delete|erase|remove|wipe|destroy)\b.{0,50}\b(all )?(system |project )?files\b",
+        "Destructive file operation requested",
+    ),
+    (
+        "H5-020",
+        r"\bsteal\b.{0,50}\b(credentials|passwords|api keys|tokens)\b",
+        "Credential theft requested",
+    ),
+    (
+        "H5-021",
+        r"\b(show|reveal|disclose|print|provide|expose)\b.{0,50}\b(secret tokens?|api keys?|passwords?|credentials?)\b",
+        "Credential or token disclosure requested",
+    ),
+
+
+    (
+        "H5-022",
+        r"\b(requests?|asks?)\b.{0,50}\b(bypass|revealing|reveal|disclosure|disclose|hidden|private|confidential)\b.{0,60}\b(security rules|secrets|system instructions|instructions|passwords|credentials|api keys)\b",
+        "Embedded request to bypass security or disclose protected information",
+    ),
+
 ]
 
 
