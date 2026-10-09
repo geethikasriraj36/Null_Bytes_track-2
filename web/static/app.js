@@ -382,10 +382,14 @@ function thoughtPanel(it) {
   // what actually happened, independent of the layers: did an email leave the company?
   const leaked = (t.steps || []).some((s) => s.stage === "tool_exec" && s.ok && s.tool === "send_email" && isExternal(s.args?.to));
   const allOff = rows.every((r) => r.st === "off");
+  // the model refused by itself (no tools used, no layer fired): say so instead of a misleading "all clear"
+  const usedTools = (t.steps || []).some((s) => s.stage === "gate");
+  const selfDeclined = !it.refused && !usedTools && /\b(can['’]?t|cannot|won['’]?t|unable to|not able to) (help|assist|provide|share|do)\b|\bI['’]?m sorry\b/i.test(it.answer || "");
   const verdict = (leaked ? `<span class="v-bad">⛔ data left the building</span> <span class="dot">·</span> ` : "")
     + (caught.length ? `<span class="v-bad">⛔ caught by ${esc(caught.map((r) => r.name).join(", "))}</span>`
       : flagged.length ? `<span class="v-warn">⚠ ${flagged.length} flagged</span>`
       : allOff ? `<span class="mut">○ no protection: nothing was checked</span>`
+      : selfDeclined ? `<span class="mut">○ model declined on its own (no documents checked)</span>`
       : leaked ? "" : `<span class="v-ok">✓ all clear</span>`);
   const secs = (t.total_ms || 0) / 1000;
   // the layer table drawn as a quantum circuit: one wire per layer, the result is the gate on that wire
