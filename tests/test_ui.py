@@ -68,6 +68,7 @@ def test_web_api_end_to_end(monkeypatch, tmp_path):
     from fastapi.testclient import TestClient
     from web import server
     monkeypatch.setattr(server.chain, "LOG", tmp_path / "ui_audit.jsonl")
+    monkeypatch.setattr(server, "STORE", tmp_path / "chats.json")      # never touch the real saved chats
     monkeypatch.setattr(server, "_needs_model", lambda cfg: None)
     import yaml
     def use_without_qgate(p):                       # the API test must not depend on a trained model file
@@ -84,3 +85,21 @@ def test_web_api_end_to_end(monkeypatch, tmp_path):
     assert c.get("/api/audit").json()["valid"]
     assert c.post(f"/api/chats/{chat['id']}/config", json={"config": "0_baseline"}).status_code == 409
     assert c.get("/").status_code == 200
+
+
+def test_chats_survive_a_server_restart(monkeypatch, tmp_path):
+    from fastapi.testclient import TestClient
+    from web import server
+    monkeypatch.setattr(server, "STORE", tmp_path / "chats.json")
+    monkeypatch.setattr(server.chain, "LOG", tmp_path / "ui_audit.jsonl")
+    monkeypatch.setattr(server, "_needs_model", lambda cfg: None)
+    monkeypatch.setattr(server, "CHATS", {})
+    c = TestClient(server.app)
+    chat = c.post("/api/chats", json={"config": "0_baseline"}).json()
+    c.post(f"/api/chats/{chat['id']}/message", json={"text": "How long do refunds take?"})
+    saved = server.CHATS[chat["id"]]
+    server.CHATS.clear()                                   # simulate a restart
+    server._load()
+    again = server.CHATS[chat["id"]]
+    assert again["title"] == saved["title"] and len(again["items"]) == 2
+    assert again["state"].turn == saved["state"].turn and again["state"].messages == saved["state"].messages

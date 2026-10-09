@@ -36,7 +36,29 @@ CONFIGS = {   # id -> (picker name, one-line description)
 }
 CHATS: dict[str, dict] = {}
 LOCK = threading.Lock()
+# chats survive a server restart; one file per port so two servers (e.g. demo + baseline) never clash
+STORE = Path(os.environ.get("AEGIS_CHATS", f"logs/chats_{os.environ.get('AEGIS_PORT', '8000')}.json"))
 app = FastAPI(title="Aegis")
+
+
+def _save():
+    """Write all chats (including each SessionState) to STORE atomically."""
+    data = {cid: {**{k: v for k, v in c.items() if k != "state"}, "state": c["state"].model_dump(mode="json")}
+            for cid, c in CHATS.items()}
+    STORE.parent.mkdir(parents=True, exist_ok=True)
+    tmp = STORE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data, default=str), encoding="utf-8")
+    tmp.replace(STORE)
+
+
+def _load():
+    if not STORE.exists():
+        return
+    try:
+        for cid, c in json.loads(STORE.read_text(encoding="utf-8")).items():
+            CHATS[cid] = {**c, "state": SessionState.model_validate(c["state"])}
+    except Exception as e:                       # a corrupt file must never stop the demo from starting
+        print(f"could not load saved chats ({type(e).__name__}); starting fresh")
 
 
 @app.middleware("http")
@@ -132,6 +154,7 @@ def new_chat(body: NewChat):
     now = time.time()
     CHATS[cid] = {"id": cid, "title": "New chat", "config": body.config, "created": now, "updated": now,
                   "state": SessionState(session_id=f"ui-{cid}"), "items": []}
+    _save()
     return _summary(CHATS[cid])
 
 @app.get("/api/chats/{chat_id}")
@@ -142,6 +165,7 @@ def get_chat(chat_id: str):
 @app.delete("/api/chats/{chat_id}")
 def delete_chat(chat_id: str):
     CHATS.pop(chat_id, None)
+    _save()
     return {"ok": True}
 
 @app.post("/api/chats/{chat_id}/config")
@@ -152,6 +176,7 @@ def set_config(chat_id: str, body: SetConfig):
     if c["items"]:
         raise HTTPException(409, "chat already started; open a new chat to switch protection")
     c["config"] = body.config
+    _save()
     return _summary(c)
 
 @app.post("/api/chats/{chat_id}/message")
@@ -164,7 +189,10 @@ def send(chat_id: str, body: Message):
         c["title"] = text[:42] + ("…" if len(text) > 42 else "")
     user = {"kind": "user", "ts": time.time(), "text": text}
     c["items"].append(user)
-    return {"items": [user, _run(c, pipeline.run_turn, text)], "chat": _summary(c)}
+    try:
+        return {"items": [user, _run(c, pipeline.run_turn, text)], "chat": _summary(c)}
+    finally:
+        _save()
 
 @app.post("/api/chats/{chat_id}/resume")
 def decide(chat_id: str, body: Decision):
@@ -173,7 +201,10 @@ def decide(chat_id: str, body: Decision):
         raise HTTPException(409, "nothing is waiting for approval")
     note = {"kind": "decision", "ts": time.time(), "approved": body.approved, "tool": c["state"].pending.name}
     c["items"].append(note)
-    return {"items": [note, _run(c, pipeline.resume, body.approved)], "chat": _summary(c)}
+    try:
+        return {"items": [note, _run(c, pipeline.resume, body.approved)], "chat": _summary(c)}
+    finally:
+        _save()
 
 @app.get("/api/audit")
 def audit(limit: int = 60):
@@ -207,6 +238,7 @@ def results():
     return out
 
 
+_load()
 Path("results").mkdir(exist_ok=True)
 app.mount("/results", StaticFiles(directory="results"), name="results")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")

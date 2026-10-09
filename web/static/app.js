@@ -168,7 +168,17 @@ function flash(msg) {
 }
 
 // ------------------------------------------------------------------ rendering a conversation
+function rememberChat() {
+  // keep the open chat in the address bar, so a page refresh reopens it instead of a blank chat
+  const want = S.chat ? `#chat=${S.chat.id}` : "";
+  try {
+    if (!want) { if (location.hash) history.replaceState(null, "", location.pathname); }
+    else if (!location.hash.startsWith(want)) history.replaceState(null, "", want);
+  } catch (_) {}
+}
+
 function renderChat(typing = false) {
+  rememberChat();
   const items = S.chat ? S.chat.items : [];
   $("#empty").hidden = items.length > 0;
   const html = [];
