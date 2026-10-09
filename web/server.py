@@ -239,6 +239,22 @@ def results():
 
 
 _load()
+
+
+def _warm_up():
+    """Load Q-Gate, its classical twin and the H3 model and simulate the training states once, in the
+    background at startup, so the first real message on stage is not the slow one (~2 s otherwise)."""
+    try:
+        if Path("models/qgate.pkl").exists():
+            config.use(ROOT / "configs" / "7_full.yaml")
+            pipeline.detector().score("Warm-up sentence for the quantum kernel cache.")
+            pipeline.twin_score("Warm-up sentence for the classical twin.")
+        pipeline._nli_model()
+    except Exception as e:
+        print(f"warm-up skipped ({type(e).__name__})")
+
+
+threading.Thread(target=_warm_up, daemon=True).start()
 Path("results").mkdir(exist_ok=True)
 app.mount("/results", StaticFiles(directory="results"), name="results")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
