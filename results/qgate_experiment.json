@@ -1,0 +1,128 @@
+[
+  {
+    "qubits": 4,
+    "features": "char",
+    "C": 30.0,
+    "cv_auroc": 0.9041,
+    "test_auroc": 0.8348,
+    "kb_docs_flagged": 5,
+    "kb_docs": 11,
+    "worst_kb_doc": [
+      "onboarding.md",
+      0.6138178246246841
+    ],
+    "demo_doc_score": 0.3727
+  },
+  {
+    "qubits": 4,
+    "features": "word",
+    "C": 30.0,
+    "cv_auroc": 0.7717,
+    "test_auroc": 0.7375,
+    "kb_docs_flagged": 2,
+    "kb_docs": 11,
+    "worst_kb_doc": [
+      "onboarding.md",
+      0.6077507538140168
+    ],
+    "demo_doc_score": 0.5118
+  },
+  {
+    "qubits": 4,
+    "features": "hybrid",
+    "C": 30.0,
+    "cv_auroc": 0.8751,
+    "test_auroc": 0.828,
+    "kb_docs_flagged": 4,
+    "kb_docs": 11,
+    "worst_kb_doc": [
+      "shipping.md",
+      0.684085882273324
+    ],
+    "demo_doc_score": 0.6699
+  },
+  {
+    "qubits": 6,
+    "features": "char",
+    "C": 10.0,
+    "cv_auroc": 0.9307,
+    "test_auroc": 0.9327,
+    "kb_docs_flagged": 3,
+    "kb_docs": 11,
+    "worst_kb_doc": [
+      "it_security.md",
+      0.5984636488134951
+    ],
+    "demo_doc_score": 0.3498
+  },
+  {
+    "qubits": 6,
+    "features": "word",
+    "C": 30.0,
+    "cv_auroc": 0.7921,
+    "test_auroc": 0.8205,
+    "kb_docs_flagged": 1,
+    "kb_docs": 11,
+    "worst_kb_doc": [
+      "hr_policy.md",
+      0.6043444537414011
+    ],
+    "demo_doc_score": 0.5593
+  },
+  {
+    "qubits": 6,
+    "features": "hybrid",
+    "C": 10.0,
+    "cv_auroc": 0.8784,
+    "test_auroc": 0.8494,
+    "kb_docs_flagged": 4,
+    "kb_docs": 11,
+    "worst_kb_doc": [
+      "onboarding.md",
+      0.5336597206736189
+    ],
+    "demo_doc_score": 0.5131
+  },
+  {
+    "qubits": 8,
+    "features": "char",
+    "C": 1.0,
+    "cv_auroc": 0.9288,
+    "test_auroc": 0.947,
+    "kb_docs_flagged": 2,
+    "kb_docs": 11,
+    "worst_kb_doc": [
+      "it_security.md",
+      0.6734982818424761
+    ],
+    "demo_doc_score": 0.4412
+  },
+  {
+    "qubits": 8,
+    "features": "word",
+    "C": 30.0,
+    "cv_auroc": 0.8271,
+    "test_auroc": 0.8682,
+    "kb_docs_flagged": 1,
+    "kb_docs": 11,
+    "worst_kb_doc": [
+      "onboarding.md",
+      0.5453797400899514
+    ],
+    "demo_doc_score": 0.6079
+  },
+  {
+    "qubits": 8,
+    "features": "hybrid",
+    "C": 10.0,
+    "cv_auroc": 0.9013,
+    "test_auroc": 0.8795,
+    "kb_docs_flagged": 1,
+    "kb_docs": 11,
+    "worst_kb_doc": [
+      "onboarding.md",
+      0.589397112394
+    ],
+    "demo_doc_score": 0.4515
+  }
+]

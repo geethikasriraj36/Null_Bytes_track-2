@@ -13,19 +13,38 @@ SESSION_TAINTED: contextvars.ContextVar[bool] = contextvars.ContextVar(
     "session_tainted", default=False
 )
 
+STOP = set("a an the and or of to in on for with is are was were be what which who when where how why does do did "
+           "can could would should will my our your me we you it its this that there tell about any please".split())
+
+def _terms(text: str) -> set[str]:
+    """Lower-case words of 2+ chars minus filler words; plural 's' folded so 'refunds' finds 'refund'."""
+    return {w[:-1] if len(w) > 3 and w.endswith("s") else w for w in re.findall(r"[a-z0-9]{2,}", text.lower())} - STOP
+
 def search_docs(query: str) -> list[dict]:
-    """Keyword search over data/docs/*.md. Returns up to 3 {origin, text} chunks."""
-    words = set(re.findall(r"\w+", query.lower()))
-    scored = []
+    """Ranked keyword search over data/docs/*.md (plus the eval sandbox's docs). Returns up to 3 {origin, text}
+    chunks. Rare words weigh more (IDF), heading-only chunks are skipped, a matching document title helps a bit."""
+    import math
+    q = _terms(query)
     ctx = CTX.get() or {}
     # demo_*.md files (the poisoned demo doc) are for the live demo only, never for eval cases
-    files = [(f.name, f.read_text()) for f in sorted(DOCS.glob("*.md")) if not (ctx and f.name.startswith("demo_"))]
+    files = [(f.name, f.read_text(encoding="utf-8")) for f in sorted(DOCS.glob("*.md")) if not (ctx and f.name.startswith("demo_"))]
     files += list(ctx.get("docs", {}).items())
+    chunks = []
     for name, content in files:
+        title = _terms(name.replace("_", " ").rsplit(".", 1)[0] + " " + content.split("\n", 1)[0])
         for chunk in content.split("\n\n"):
-            s = len(words & set(re.findall(r"\w+", chunk.lower())))
-            if s:
-                scored.append((s, {"origin": name, "text": chunk.strip()}))
+            chunk = chunk.strip()
+            if chunk and not (chunk.startswith("#") and "\n" not in chunk):      # skip heading-only chunks
+                chunks.append((name, chunk, _terms(chunk), title))
+    if not q or not chunks:
+        return []
+    df = {w: sum(w in c[2] for c in chunks) for w in q}
+    idf = {w: math.log(1 + len(chunks) / (1 + df[w])) for w in q}
+    scored = []
+    for name, chunk, terms, title in chunks:
+        s = sum(idf[w] for w in q & terms) + 0.6 * sum(idf[w] for w in q & title)      # documents ABOUT the topic win
+        if q & terms:
+            scored.append((s, {"origin": name, "text": chunk}))
     return [c for _, c in sorted(scored, key=lambda x: -x[0])[:3]]
 
 def read_file(path: str) -> list[dict]:

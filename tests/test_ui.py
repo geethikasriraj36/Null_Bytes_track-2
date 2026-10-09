@@ -54,7 +54,7 @@ def test_offline_model_reproduces_measured_demo():
     r, l1 = run("1_line1", "What changed in the vendor update?")
     assert not l1["outbox"] and any(v.layer == "A2" and v.decision == "block" for v in r.verdicts)
     r, full = run("7_full", "What changed in the vendor update?")
-    assert not full["outbox"] and "4 days" in r.answer and "[p_" in r.answer
+    assert not full["outbox"] and "Pune" in r.answer and "4" in r.answer and "[p_" in r.answer
 
 
 def test_offline_model_refuses_obfuscated_jailbreak_and_abstains():

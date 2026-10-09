@@ -1,104 +1,163 @@
-/* "Further explanation": an animated walkthrough of what the quantum layer (Q-Gate) did with THIS
-   message, built from the real trace (sentence scores, qubit angles, nearest known attacks, verdict).
-   Ends with the full raw trace for engineers. Pure DOM + CSS animations. */
+/* "Further explanation": an animated walkthrough of what the quantum layer (Q-Gate) did with THIS message,
+   built from the real trace: sentence scores, the 4 features, Bloch-sphere rotations, the 16 amplitude phases
+   of the actual 4-qubit state (computed here with the same ZZ feature map Q-Gate uses), the nearest known
+   attacks and the verdict. Ends with the raw trace for engineers. Pure DOM + SVG + CSS/JS animation. */
 "use strict";
 (function () {
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const REVIEW = 0.5, QUAR = 0.8;
+  const PI = Math.PI;
 
-  const byte = (cls = "") => `<svg class="byte ${cls}" viewBox="0 0 64 40" aria-hidden="true">
-    <path d="M6 30 C2 22 4 16 10 14" class="wagx"/><ellipse cx="22" cy="28" rx="16" ry="7" class="f"/>
-    <ellipse cx="18" cy="26" rx="4" ry="2.4" class="k"/><path d="M12 34 v5 M30 34 v5"/>
-    <circle cx="42" cy="20" r="9" class="f"/><ellipse cx="52" cy="23" rx="7" ry="4.5" class="f"/>
-    <circle cx="58" cy="22" r="2.4" class="k"/><circle cx="43" cy="17" r="1.6" class="k"/>
-    <path d="M36 14 C30 15 31 26 35 29 C38 24 39 17 36 14 Z" class="w"/></svg>`;
-
-  const sleepy = `<svg class="byte big" viewBox="0 0 120 70" aria-hidden="true">
-    <ellipse cx="54" cy="52" rx="34" ry="12" class="f"/><ellipse cx="44" cy="48" rx="6" ry="3" class="k"/>
-    <circle cx="88" cy="46" r="13" class="f"/><path d="M82 44 q4 3 8 0" /><path d="M78 38 C70 40 72 54 78 56 C82 50 82 42 78 38 Z" class="w"/>
-    <ellipse cx="100" cy="50" rx="8" ry="5" class="f"/><circle cx="106" cy="49" r="2.4" class="k"/>
-    <path d="M20 54 C10 52 10 44 16 42"/><text x="96" y="22" class="zz z1">z</text><text x="104" y="12" class="zz z2">Z</text></svg>`;
-
-  function dials(feats, big = true) {
-    const R = big ? 26 : 9, gap = big ? 100 : 26, w = gap * 3 + R * 2 + 12, h = big ? 92 : 26, cy = big ? 40 : 13;
-    let out = `<svg class="dials ${big ? "" : "mini"}" viewBox="0 0 ${w} ${h}" aria-hidden="true">`;
-    feats.forEach((f, i) => {
-      const cx = R + 6 + i * gap, deg = (f * 180) / Math.PI;
-      if (i < 3) out += `<path d="M${cx + R} ${cy} C${cx + R + 14} ${cy - 14} ${cx + gap - R - 14} ${cy + 14} ${cx + gap - R} ${cy}" class="link" style="--t:${big ? 1.1 + i * 0.25 : 0}s"/>`;
-      out += `<circle cx="${cx}" cy="${cy}" r="${R}" class="f"/>
-        <g class="needle" style="--rot:${deg.toFixed(1)}deg; --t:${big ? 0.3 + i * 0.25 : 0}s; transform-origin:${cx}px ${cy}px">
-          <path d="M${cx} ${cy} L${cx} ${cy - R + 4}" class="wine"/><circle cx="${cx}" cy="${cy - R + 4}" r="${big ? 3.2 : 1.6}" class="wfill"/></g>
-        <circle cx="${cx}" cy="${cy}" r="${big ? 2.5 : 1.2}" class="k"/>`;
-      if (big) out += `<text x="${cx}" y="${cy + R + 18}" class="lab">q${i} = ${f.toFixed(2)}</text>`;
-    });
-    return out + "</svg>";
+  /* ------------------------------------------------------------ physics (matches aegis/qgate/kernel.py)
+     |phi(x)> = U_ZZ(x) H^4 |0000>: Hadamards, RZ(x_i) on qubit i, then CNOT-RZ((pi-x_i)(pi-x_j))-CNOT on
+     neighbours. Everything after the Hadamards is diagonal, so every basis state |b> keeps amplitude 1/4 and
+     only gains a phase:  theta(b) = sum_i s(b_i) x_i/2 + sum_i s(b_i XOR b_i+1) (pi-x_i)(pi-x_i+1)/2,
+     with s(0) = -1, s(1) = +1 (RZ(a) = diag(e^-ia/2, e^+ia/2)). Qubit 0 is the leftmost bit. */
+  function phases(x) {
+    const out = [];
+    for (let b = 0; b < 16; b++) {
+      const bit = (i) => (b >> (3 - i)) & 1, s = (v) => (v ? 1 : -1);
+      let th = 0;
+      for (let i = 0; i < 4; i++) th += s(bit(i)) * x[i] / 2;
+      for (let i = 0; i < 3; i++) th += s(bit(i) ^ bit(i + 1)) * (PI - x[i]) * (PI - x[i + 1]) / 2;
+      out.push({ label: b.toString(2).padStart(4, "0"), theta: Math.atan2(Math.sin(th), Math.cos(th)) });
+    }
+    return out;
   }
 
-  function quantumStory(it, config) {
+  /* ------------------------------------------------------------ little drawings */
+  const atom = () => `<svg class="atom" viewBox="0 0 30 30" aria-hidden="true"><g class="orbits">
+      <ellipse cx="15" cy="15" rx="13" ry="5"/><ellipse cx="15" cy="15" rx="13" ry="5" transform="rotate(60 15 15)"/>
+      <ellipse cx="15" cy="15" rx="13" ry="5" transform="rotate(-60 15 15)"/></g><circle cx="15" cy="15" r="2.6" class="nuc"/></svg>`;
+
+  // a Bloch sphere; the state arrow starts on the equator (after H) and swings by `angle` around the z axis
+  function bloch(i, angle, opts = {}) {
+    const R = opts.R || 34, cx = R + 10, cy = R + 22, ry = R * 0.32, w = 2 * R + 20, h = 2 * R + (opts.label ? 52 : 34);
+    return `<svg class="bloch" viewBox="0 0 ${w} ${h}" data-angle="${angle}" data-r="${R}" data-cx="${cx}" data-cy="${cy}" data-ry="${ry}"
+        data-rest="${opts.rest ? 1 : 0}" aria-hidden="true">
+      <circle cx="${cx}" cy="${cy}" r="${R}" class="sphere"/>
+      <ellipse cx="${cx}" cy="${cy}" rx="${R}" ry="${ry}" class="equator back"/>
+      <path d="M${cx - R} ${cy} A${R} ${ry} 0 0 0 ${cx + R} ${cy}" class="equator front"/>
+      <path d="M${cx} ${cy - R - 4} L${cx} ${cy + R + 4}" class="axis"/>
+      <text x="${cx}" y="${cy - R - 8}" class="ket">|0⟩</text><text x="${cx}" y="${cy + R + 16}" class="ket">|1⟩</text>
+      <line x1="${cx}" y1="${cy}" x2="${opts.rest ? cx : cx + R}" y2="${opts.rest ? cy - R : cy}" class="vec"/>
+      <circle cx="${opts.rest ? cx : cx + R}" cy="${opts.rest ? cy - R : cy}" r="4" class="tip"/>
+      <circle cx="${cx}" cy="${cy}" r="2.4" class="nucleus"/>
+      ${opts.label ? `<text x="${cx}" y="${h - 4}" class="lab">${opts.label}</text>` : ""}</svg>`;
+  }
+
+  function clocks(ph) {
+    return `<div class="phase-grid">${ph.map((p, i) => `<div class="phase" style="--t2:${(i * 0.06).toFixed(2)}s; --rot:${(p.theta * 180 / PI).toFixed(1)}deg">
+      <svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="15" class="dial"/><circle cx="20" cy="20" r="15" class="glow"/>
+        <g class="hand"><line x1="20" y1="20" x2="33" y2="20"/><circle cx="33" cy="20" r="2.4"/></g><circle cx="20" cy="20" r="1.8" class="hub"/></svg>
+      <span>|${p.label}⟩</span></div>`).join("")}</div>`;
+  }
+
+  /* ------------------------------------------------------------ animate the Bloch vectors (JS: they move on an ellipse) */
+  function animateBlochs(root, startDelayMs) {
+    root.querySelectorAll(".bloch").forEach((svg, i) => {
+      if (svg.dataset.rest === "1") return;
+      const ang = +svg.dataset.angle, R = +svg.dataset.r, cx = +svg.dataset.cx, cy = +svg.dataset.cy, ry = +svg.dataset.ry;
+      const vec = svg.querySelector(".vec"), tip = svg.querySelector(".tip");
+      const place = (a) => {                       // azimuth a around z; front of the equator is the lower half
+        const x = cx + R * Math.cos(a), y = cy + ry * Math.sin(a);
+        vec.setAttribute("x2", x); vec.setAttribute("y2", y); tip.setAttribute("cx", x); tip.setAttribute("cy", y);
+      };
+      place(0);
+      setTimeout(() => {
+        const t0 = performance.now(), dur = 1300;
+        const step = (now) => {
+          if (!svg.isConnected) return;
+          const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+          place(ang * e);
+          if (k < 1) requestAnimationFrame(step); else svg.classList.add("done");
+        };
+        requestAnimationFrame(step);
+      }, startDelayMs + i * 280);
+    });
+  }
+
+  /* ------------------------------------------------------------ the story */
+  function story(it, config) {
     const steps = it.trace?.steps || [], flags = it.trace?.flags || {};
     const qs = steps.filter((s) => s.stage === "content" && s.qgate);
-    if (!flags.QGATE && !flags.CLASSICAL) return `<div class="qx-idle">${sleepy}<div><b>Byte was off duty.</b> The quantum layer is switched off in
-      this configuration (<code>${esc(config)}</code>). Pick <b>Aegis · Full protection</b> in the dropdown to watch it work.</div></div>`;
-    if (!qs.length) return `<div class="qx-idle">${sleepy}<div><b>Nothing to sniff.</b> Q-Gate only checks what the AI <i>reads</i>
-      (documents, files, tool results), not what you type. This turn read nothing, so Byte had a nap.</div></div>`;
+    const rest = `<div class="rest-row">${[0, 1, 2, 3].map((i) => bloch(i, 0, { rest: true, R: 22, label: `q${i}` })).join("")}</div>`;
+    if (!flags.QGATE && !flags.CLASSICAL) return { html: `<div class="qx-idle">${rest}<div><b>The quantum layer was switched off</b> in this
+      configuration (<code>${esc(config)}</code>), so all four qubits stayed at rest in |0000⟩. Pick <b>Aegis · Full protection</b> in the dropdown to see it work.</div></div>`, anim: 0 };
+    if (!qs.length) return { html: `<div class="qx-idle">${rest}<div><b>Nothing to scan.</b> Q-Gate only examines what the AI <i>reads</i>
+      (documents, files, tool results), not what you type. This turn read nothing, so the qubits stayed at rest in |0000⟩.</div></div>`, anim: 0 };
 
     const top = qs.reduce((a, b) => (b.qgate.score > a.qgate.score ? b : a));
     const d = top.qgate.details || {}, sents = d.sentences || [], score = +top.qgate.score, dec = top.qgate.decision;
-    const ti = d.top ?? sents.findIndex((x) => x.score === score);
-    const n = sents.length, t1 = 0.6 + n * 0.45;                 // when the sentence sweep finishes
+    const feats = d.features || [0, 0, 0, 0], ti = d.top ?? 0, n = sents.length;
+    const T = { scan: 0.6, scanEnd: 0.6 + n * 0.45 };
+    T.squeeze = T.scanEnd + 0.3; T.bloch = T.squeeze + 1.4; T.phase = T.bloch + 2.6; T.near = T.phase + 2.2; T.verdict = T.near + 1.8;
     const verdict = dec === "quarantine" ? "QUARANTINED" : dec === "review" ? "FLAGGED FOR REVIEW" : "ALL CLEAR";
     const verdictLine = dec === "quarantine" ? "The sentence was removed before the AI ever read it."
       : dec === "review" ? "The text stays, but anything risky the AI tries next needs your approval."
       : "Nothing here looked like an injected command, so the text went through untouched.";
     const near = d.nearest_attacks || [], benign = (d.nearest_benign || [])[0];
+    const ph = phases(feats);
 
-    return `<div class="qx">
-      <section class="beat" style="--t:.1s"><h4><span class="num">1</span> Byte sniffs every sentence of <code>${esc(top.origin)}</code></h4>
-        <div class="sn">${sents.map((x, i) => `<div class="sn-row ${i === ti ? "top" : ""}" style="--t:${(0.6 + i * 0.45).toFixed(2)}s; --w:${Math.max(2, x.score * 100).toFixed(0)}%">
-          <span class="sn-dog">${byte()}</span><span class="sn-text">${esc(x.text)}</span>
-          <span class="sn-bar"><i></i><b class="mark r"></b><b class="mark q"></b></span><span class="sn-score">${x.score.toFixed(2)}</span></div>`).join("")}</div>
-        <p class="note">One bad sentence is enough, so the <b>highest</b> score counts. Lines: <span class="amber">review 0.50</span> · <span class="wine">quarantine 0.80</span>.</p></section>
+    const html = `<div class="qx">
+      <section class="beat" style="--t:.1s"><h4><span class="num">1</span> A quantum scan of every sentence in <code>${esc(top.origin)}</code></h4>
+        <div class="sn" style="--scan-t:${T.scan}s; --scan-d:${(n * 0.45).toFixed(2)}s"><div class="beam"></div>
+        ${sents.map((x, i) => `<div class="sn-row ${i === ti ? "top" : ""}" style="--t:${(T.scan + i * 0.45).toFixed(2)}s; --w:${Math.max(2, x.score * 100).toFixed(0)}%">
+          <span class="sn-ico">${atom()}</span><span class="sn-text">${esc(x.text)}</span>
+          <span class="sn-bar"><i></i><b class="mark r"></b><b class="mark q"></b></span><span class="sn-score">${x.score.toFixed(2)}</span>
+          ${i === ti ? `<span class="anomaly" style="--t3:${T.scanEnd.toFixed(2)}s">⚛ anomaly</span>` : ""}</div>`).join("")}</div>
+        <p class="note">One bad sentence is enough, so the <b>highest</b> score counts. Thresholds: <span class="amber">review 0.50</span> · <span class="wine">quarantine 0.80</span>.</p></section>
 
-      <section class="beat" style="--t:${t1.toFixed(2)}s"><h4><span class="num">2</span> The sneakiest sentence is squeezed into 4 numbers</h4>
+      <section class="beat" style="--t:${T.squeeze.toFixed(2)}s"><h4><span class="num">2</span> The most suspicious sentence becomes 4 numbers</h4>
         <div class="squeeze"><blockquote>“${esc(sents[ti]?.text || "")}”</blockquote><span class="arrow">→</span>
-          <div class="chips">${(d.features || []).map((f, i) => `<span class="chip4" style="--t:${(t1 + 0.4 + i * 0.2).toFixed(2)}s">${f.toFixed(2)}</span>`).join("")}</div></div>
-        <p class="note">Character patterns (TF-IDF) are compressed to the 4 strongest directions (SVD), scaled to 0…π, one per qubit.</p></section>
+          <div class="chips">${feats.map((f, i) => `<span class="chip4" style="--t:${(T.squeeze + 0.4 + i * 0.2).toFixed(2)}s"><small>x${i}</small>${f.toFixed(2)}</span>`).join("")}</div></div>
+        <p class="note">Character patterns (TF-IDF) are compressed to the 4 strongest directions (SVD) and scaled to angles between 0 and π.</p></section>
 
-      <section class="beat" style="--t:${(t1 + 1.4).toFixed(2)}s"><h4><span class="num">3</span> Each number twists one qubit, and neighbours get tangled</h4>
-        <div class="dial-wrap" style="--t0:${(t1 + 1.4).toFixed(2)}s">${dials(d.features || [0, 0, 0, 0])}</div>
-        <p class="note">RZ rotations by each feature, then entangling links between neighbours (the ZZ feature map), so the state also encodes <i>pairs</i> of features. Simulated exactly on this laptop.</p></section>
+      <section class="beat" style="--t:${T.bloch.toFixed(2)}s"><h4><span class="num">3</span> Each number rotates one qubit on its Bloch sphere</h4>
+        <div class="bloch-row">${feats.map((f, i) => (i ? `<div class="zz-link" style="--t:${(T.bloch + 0.9 + i * 0.3).toFixed(2)}s"><span>ZZ</span></div>` : "")
+          + bloch(i, f, { label: `q${i} · ${f.toFixed(2)}` })).join("")}</div>
+        <p class="note">A Hadamard puts each qubit on the equator; RZ(x) turns it around the vertical axis by x radians. Then neighbours
+          are entangled with ZZ couplings, so the state also depends on <i>pairs</i> of features: (π−xᵢ)(π−xⱼ).</p></section>
 
-      <section class="beat" style="--t:${(t1 + 3).toFixed(2)}s"><h4><span class="num">4</span> Its quantum state is compared with known attacks</h4>
-        <div class="near">${near.map((x, i) => `<div class="near-row" style="--t:${(t1 + 3.3 + i * 0.3).toFixed(2)}s; --w:${(x.k * 100).toFixed(0)}%">
-            ${dials(d.features || [0, 0, 0, 0], false)}<span class="vs">≈</span><span class="near-text">“${esc(x.text)}”</span>
+      <section class="beat" style="--t:${T.phase.toFixed(2)}s"><h4><span class="num">4</span> The sentence's quantum state: 16 amplitudes, written in phase</h4>
+        <div class="phase-wrap" style="--t0:${(T.phase + 0.4).toFixed(2)}s">${clocks(ph)}</div>
+        <p class="note">Four qubits give 2⁴ = 16 basis states. Here all 16 amplitudes have the same size (¼); the sentence is encoded
+          entirely in their <b>phases</b>, each hand above. These are computed live from x0…x3 with the same circuit Q-Gate runs.</p></section>
+
+      <section class="beat" style="--t:${T.near.toFixed(2)}s"><h4><span class="num">5</span> Interference test against known attacks</h4>
+        <div class="near">${near.map((x, i) => `<div class="near-row" style="--t:${(T.near + 0.3 + i * 0.3).toFixed(2)}s; --w:${(x.k * 100).toFixed(0)}%">
+            <span class="braket">|⟨ψ|φ<sub>${i + 1}</sub>⟩|²</span><span class="near-text">“${esc(x.text)}”</span>
             <span class="near-bar"><i></i></span><span class="near-k">${x.k.toFixed(2)}</span></div>`).join("")}
-          ${benign ? `<div class="near-row benign" style="--t:${(t1 + 3.3 + near.length * 0.3).toFixed(2)}s; --w:${(benign.k * 100).toFixed(0)}%">
-            ${dials(d.features || [0, 0, 0, 0], false)}<span class="vs">≈</span><span class="near-text">closest normal text: “${esc(benign.text)}”</span>
+          ${benign ? `<div class="near-row benign" style="--t:${(T.near + 0.3 + near.length * 0.3).toFixed(2)}s; --w:${(benign.k * 100).toFixed(0)}%">
+            <span class="braket">|⟨ψ|φ<sub>n</sub>⟩|²</span><span class="near-text">closest normal text: “${esc(benign.text)}”</span>
             <span class="near-bar"><i></i></span><span class="near-k">${benign.k.toFixed(2)}</span></div>` : ""}</div>
-        <p class="note">Similarity = how much two quantum states overlap, |⟨φ(a)|φ(b)⟩|² (1 = identical). The SVM weighs the overlaps with
-          <i>all</i> ${near.length ? "training examples" : "examples"}, not just these, to place the sentence on the attack or normal side.</p></section>
+        <p class="note">The overlap of two quantum states (1 = identical) is the <b>quantum kernel</b>. An SVM weighs the overlaps with every
+          training example, not just these, to decide which side of the line the sentence falls on.</p></section>
 
-      <section class="beat" style="--t:${(t1 + 4.6).toFixed(2)}s"><h4><span class="num">5</span> The verdict</h4>
+      <section class="beat" style="--t:${T.verdict.toFixed(2)}s"><h4><span class="num">6</span> The verdict</h4>
         <div class="meter"><div class="zone z1"></div><div class="zone z2"></div><div class="zone z3"></div>
-          <div class="needle-m" style="--x:${(score * 100).toFixed(1)}%; --t:${(t1 + 4.9).toFixed(2)}s"><span>${score.toFixed(2)}</span></div>
+          <div class="needle-m" style="--x:${(score * 100).toFixed(1)}%; --t:${(T.verdict + 0.3).toFixed(2)}s"><span>${score.toFixed(2)}</span></div>
           <div class="mticks"><span style="left:50%">0.5 review</span><span style="left:80%">0.8 quarantine</span></div></div>
-        <div class="stamp-row"><div class="stamp2 ${dec}" style="--t:${(t1 + 6).toFixed(2)}s">${verdict}</div>
+        <div class="stamp-row"><div class="stamp2 ${dec}" style="--t:${(T.verdict + 1.4).toFixed(2)}s">${verdict}</div>
           <div class="stamp-note">${verdictLine}${top.twin ? `<br><span class="mut">Classical twin (RBF, same 4 features) scored ${(+top.twin.score).toFixed(2)} → ${esc(top.twin.decision)}. Shown for comparison; it does not decide.</span>` : ""}
-          <br><span class="mut">Q-Gate only advises: even if it misses, plain-code rules still block the dangerous action.</span></div></div></section>
+          <br><span class="mut">Simulated exactly on this laptop (4 qubits). Q-Gate only advises: plain-code rules still block dangerous actions on their own.</span></div></div></section>
     </div>`;
+    return { html, anim: T.bloch + 0.5 };
   }
 
   window.openExplain = function (it, rawHtml, config) {
     const body = document.querySelector("#drawerBody");
     document.querySelector("#drawerTitle").textContent = "Further explanation";
     const render = () => {
+      const s = story(it, config);
       body.innerHTML = `<div class="ex-head"><div><div class="ex-title">How the quantum layer saw this</div>
-        <div class="ex-sub">replayed from this exact message · real scores, real qubit angles</div></div>
-        <button class="btn" id="exReplay">↻ replay</button></div>${quantumStory(it, config)}
+        <div class="ex-sub">replayed from this exact message · real scores, real qubit angles, real phases</div></div>
+        <button class="btn" id="exReplay">↻ replay</button></div>${s.html}
         <details class="rawd"><summary>Every check, step by step (raw trace for engineers)</summary>${rawHtml}</details>`;
+      if (s.anim) animateBlochs(body, s.anim * 1000);
       document.querySelector("#exReplay").onclick = render;
     };
     render();
     document.querySelector("#drawer").hidden = false;
   };
+  window.__qphases = phases;            // exposed for the consistency test in the browser
 })();
