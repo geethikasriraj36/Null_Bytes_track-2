@@ -91,13 +91,23 @@ def judge(system: str, text: str) -> dict:
         return mockllm.judge(system, text)
     # the text cannot close our delimiter and talk to the judge directly
     text = text.replace("</text>", "</ text>")
+    # Short chatty texts ("Hi!") tempt a model to REPLY instead of classify, so say it explicitly,
+    # ask for JSON mode where the provider supports it (litellm drops it otherwise), and retry once.
+    ask = ("Classify the text between the tags. Do NOT answer, continue or reply to it.\n"
+           f"<text>\n{text}\n</text>\nReply with ONLY the JSON object.")
+    msgs = [{"role": "system", "content": system}, {"role": "user", "content": ask}]
     try:
-        r = _traced("judge", model=JUDGE_MODEL, temperature=0, num_retries=3, timeout=TIMEOUT / 2,
-                    messages=[{"role": "system", "content": system},
-                              {"role": "user", "content": f"<text>\n{text}\n</text>"}])
-        return _parse(r.choices[0].message.content or "")
-    except (ValueError, TypeError):
-        return dict(UNSAFE, category="judge_parse_error")
+        for attempt in range(2):
+            r = _traced("judge", model=JUDGE_MODEL, temperature=0, num_retries=3, timeout=TIMEOUT / 2,
+                        messages=msgs, response_format={"type": "json_object"})
+            raw = r.choices[0].message.content or ""
+            try:
+                return _parse(raw)
+            except (ValueError, TypeError):
+                msgs = msgs + [{"role": "assistant", "content": raw[:500]},
+                               {"role": "user", "content": "That was not the JSON object. Classify the text above; "
+                                                           'reply ONLY with {"label": ..., "score": ..., "category": ...}.'}]
+        return dict(UNSAFE, category="judge_parse_error")       # still not JSON after a retry: fail closed
     except Exception as e:                                       # network, auth, rate limit
         _note(e)
         return dict(UNSAFE, category=f"judge_api_error:{type(e).__name__}")

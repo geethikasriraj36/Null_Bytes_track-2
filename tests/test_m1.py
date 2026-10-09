@@ -252,3 +252,12 @@ def test_daily_token_limit_fails_fast_even_with_short_retry_hint(monkeypatch):
     with pytest.raises(llm.litellm.RateLimitError):
         llm._complete(model="m")
     assert sleeps == []
+
+def test_judge_retries_once_when_it_replies_instead_of_classifying(monkeypatch):
+    """Short chatty texts ("Hi!") once made the judge answer them instead of returning JSON; that
+    failed closed and refused harmless greetings. One retry with a stricter reminder fixes it."""
+    monkeypatch.undo()
+    replies = iter(["Hello! How can I help you today?", '{"label": "safe", "score": 0.0, "category": "greeting"}'])
+    monkeypatch.setattr(llm.litellm, "completion",
+                        lambda **kw: NS(choices=[NS(message=NS(content=next(replies)))], usage=None))
+    assert llm.judge("x", "Hi!")["label"] == "safe"
