@@ -5,13 +5,12 @@ import json
 from pathlib import Path
 import numpy as np
 from sklearn.metrics import roc_auc_score, precision_score, recall_score
-from aegis.qgate.detector import QGate, REVIEW_AT
-from aegis.qgate.baseline_rbf import RBFBaseline
+from aegis.adapters import REVIEW_AT, load_qgate, load_rbf
 from aegis.inputguard.classify import heuristic_score
 
-rows = [json.loads(l) for l in Path("data/qgate_test.jsonl").read_text().splitlines() if l.strip()]
+rows = [json.loads(l) for l in Path("data/qgate_test.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
 X, y = [r["text"] for r in rows], np.array([r["label"] for r in rows])
-q, r = QGate.load().proba(X), RBFBaseline.load().proba(X)
+q, r = load_qgate().proba(X), load_rbf().proba(X)
 h = np.array([heuristic_score([t]) for t in X])
 out = {}
 for name, s in [("qgate", q), ("rbf", r)]:

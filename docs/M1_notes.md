@@ -83,3 +83,14 @@ Say: "Classifiers raise suspicion but are never the last line. Every action pass
 - *Why not a better system prompt?* We use one (J2 + spotlighting), but prompts are suggestions to the model; cite config 4 vs 6 from `summary.csv` once the ablation has run (not measured yet).
 - *Multi-turn attacks?* J3 keeps a decaying risk score; suspicious turns add up to strict mode (tier-2 tools need confirmation) and then end the session.
 - *What if a component fails?* We fail closed: any exception returns a safe message, a judge that returns garbage counts as unsafe, and the chat history is repaired so the next turn works.
+
+## Integration log
+
+- **M4 (Vinith)**: `chain.log()/text_hash()/LOG` wrap his `append_event()`. `eval/run.py` runs cases through `pipeline.run_turn` (default) or his keyword policy (`--mode policy`). H3 falls back to H2 if the NLI model is missing.
+- **M3 (Krishna)**: his `aegis/ingress/*` and `aegis/qgate/*` are used as written; `aegis/adapters.py` maps them to the section-10 contract:
+  - `process()` uses M3's role ACL (permissions `secret` -> admin, `internal` -> agent, else user) and returns `contracts.ContentItem` + verdicts.
+  - `scan()` uses M3's detectors but does not redact emails (A2/D4 must see addresses), returns `(text, types)`.
+  - `canary_hit()` checks M3's canaries **plus** the system-prompt canary and `sk-canary-0000DEADBEEF`.
+  - `load_qgate()/load_rbf()` wrap his models; per-sentence max score, REVIEW 0.5 / QUARANTINE 0.8.
+  - `scripts/train_qgate.py` trains RBF on Q-Gate's own embedder features (fair E1).
+- Ask M3: add the system-prompt canary to `scan.CANARIES`, an Aadhaar pattern, and branch from `main` next time.

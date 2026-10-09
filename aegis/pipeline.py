@@ -7,8 +7,7 @@ from aegis import llm
 from aegis.audit import chain
 from aegis.inputguard.normalize import normalize
 from aegis.inputguard import classify, risk
-from aegis.ingress.process import process
-from aegis.ingress.scan import scan, canary_hit
+from aegis.adapters import process, scan, canary_hit      # M3 ingress behind the section-10 contract
 from aegis.line1 import taint, action_token
 from aegis.toolsafety.gate import check_call, decide, REGISTRY
 from aegis.tools.sim import execute, TOOLS, TOOL_SPECS
@@ -25,10 +24,22 @@ _det: dict = {}
 def detector():
     key = "qgate" if CFG["QGATE"] else "rbf"
     if key not in _det:
-        from aegis.qgate.detector import QGate
-        from aegis.qgate.baseline_rbf import RBFBaseline
-        _det[key] = QGate.load() if key == "qgate" else RBFBaseline.load()
+        from aegis.adapters import load_qgate, load_rbf
+        _det[key] = load_qgate() if key == "qgate" else load_rbf()
     return _det[key]
+
+_nli: dict = {}
+
+def _nli_model():
+    """H3 cross-encoder, loaded once per process (it is slow to load). None if unavailable.
+    Keyed on the loader so tests that patch nli.load_model get their fake."""
+    if _nli.get("loader") is not nli.load_model:
+        try:
+            model = nli.load_model()
+        except Exception:
+            model = None
+        _nli.update(loader=nli.load_model, model=model)
+    return _nli["model"]
 
 def audit(state, event, **kw):
     if CFG["M"]:
@@ -212,18 +223,19 @@ def _check_output(state, text, verdicts):
             verdicts.append(Verdict(layer="H5", decision="abstain", score=1))
         else:
             h2_checked = citation_check.check(final, state.passages)
-            try:
-                h3_checked = nli.check(h2_checked, state.passages)
-            except Exception:
-                final = ABSTAIN
-                verdicts.append(Verdict(
-                    layer="H3", decision="abstain", score=1.0,
-                    reason="nli_unavailable",
-                ))
-                verdicts.append(Verdict(
-                    layer="H5", decision="abstain", score=1.0,
-                    reason="h3_verification_failed",
-                ))
+            model = _nli_model()
+            h3_checked = None
+            if model is not None:
+                try:
+                    h3_checked = nli.check(h2_checked, state.passages, model=model)
+                except Exception:
+                    h3_checked = None
+            if h3_checked is None:
+                # H3 is a Recommended layer: if its model is missing or errors, fall back to the
+                # deterministic H2 citation check instead of abstaining on every grounded answer.
+                verdicts.append(Verdict(layer="H3", decision="flag", score=0.0, reason="nli_unavailable"))
+                final, v = h5_decide(h2_checked)
+                verdicts.append(v)
             else:
                 rejected = sum(not item.get("supported", False)
                                for item in h3_checked)
