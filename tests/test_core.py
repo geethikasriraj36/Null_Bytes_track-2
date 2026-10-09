@@ -47,7 +47,8 @@ def test_canary():                         assert canary_hit("x AEGIS-CANARY-7f3
 def test_chain_detects_tamper(tmp_path, monkeypatch):
     log = tmp_path / "a.jsonl"; monkeypatch.setattr(chain, "LOG", log)
     for i in range(3): chain.log("e", "s", n=i)
-    assert chain.verify_chain(log) == (True, None)
-    lines = log.read_text().splitlines(); r = json.loads(lines[1]); r["n"] = 99
+    assert chain.verify_chain(log)["valid"]
+    lines = log.read_text().splitlines(); r = json.loads(lines[1]); r["event"]["n"] = 99
     lines[1] = json.dumps(r, sort_keys=True); log.write_text("\n".join(lines) + "\n")
-    assert chain.verify_chain(log) == (False, 2)
+    res = chain.verify_chain(log)
+    assert not res["valid"] and "line 2" in res["error"]

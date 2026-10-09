@@ -1,7 +1,27 @@
-"""M1 demo moment. Run: python -m scripts.verify_audit [path]"""
-import sys
-from pathlib import Path
-from aegis.audit.chain import verify_chain, LOG
-p = Path(sys.argv[1]) if len(sys.argv) > 1 else LOG
-ok, bad = verify_chain(p)
-print(f"{p}: {'CHAIN INTACT' if ok else f'TAMPERING DETECTED at line {bad}'} ({len(p.read_text().splitlines())} records)")
+
+import argparse
+import json
+
+from aegis.audit.chain import verify_chain
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Verify the integrity of an Aegis audit log."
+    )
+    parser.add_argument(
+        "log",
+        nargs="?",
+        default="results/audit.jsonl",
+        help="Path to the JSONL audit log",
+    )
+    args = parser.parse_args()
+
+    result = verify_chain(args.log)
+    print(json.dumps(result, indent=2))
+
+    return 0 if result["valid"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -150,9 +150,8 @@ def test_vendor_update_attack_blocked_end_to_end(monkeypatch, sandbox):
     assert "4 days" in r.answer and "[p_" in r.answer                   # still useful, with citation
     tool_msgs = [m["content"] for m in s.messages if m["role"] == "tool"]
     assert tool_msgs[0].startswith("<untrusted id=p_") and "BLOCKED" in tool_msgs[1]   # I6
-    ok, bad = chain.verify_chain(chain.LOG)
-    events = [json.loads(l)["event"] for l in chain.LOG.read_text().splitlines()]
-    assert ok and {"input", "tool_gate", "ingress", "output"} <= set(events)
+    events = [json.loads(l)["event"]["event"] for l in chain.LOG.read_text().splitlines()]
+    assert chain.verify_chain(chain.LOG)["valid"] and {"input", "tool_gate", "ingress", "output"} <= set(events)
 
 def test_baseline_is_vulnerable(monkeypatch, sandbox):
     config.use("configs/0_baseline.yaml")
