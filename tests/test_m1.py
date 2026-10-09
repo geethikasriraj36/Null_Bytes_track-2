@@ -241,3 +241,14 @@ def test_layer_exception_never_raises_and_repairs_history(monkeypatch):
 
 def test_resume_without_pending_is_safe():
     assert "Nothing" in pipeline.resume(SessionState(session_id="n"), True).answer
+
+def test_daily_token_limit_fails_fast_even_with_short_retry_hint(monkeypatch):
+    sleeps = []
+    monkeypatch.setattr(llm.time, "sleep", sleeps.append)
+    def completion(**kw):
+        raise llm.litellm.RateLimitError("Rate limit reached on tokens per day (TPD): Limit 200000. "
+                                         "Please try again in 20.7s.", llm_provider="groq", model="m")
+    monkeypatch.setattr(llm.litellm, "completion", completion)
+    with pytest.raises(llm.litellm.RateLimitError):
+        llm._complete(model="m")
+    assert sleeps == []

@@ -24,7 +24,10 @@ def _complete(**kw):
             return litellm.completion(**kw)
         except litellm.RateLimitError as e:
             wait = _retry_after(e) or min(60, 5 * 2 ** attempt)
-            if attempt == RATE_RETRIES or wait > 120:
+            # Groq says "tokens per day (TPD) ... try again in 20s": a rolling DAILY window, not a
+            # per-minute blip, so waiting just hangs the UI. Gemini says "quota ... retry in 13h".
+            daily = re.search(r"per day|\b[TR]PD\b|quota", str(e), re.I)
+            if attempt == RATE_RETRIES or wait > 120 or daily:
                 raise
             time.sleep(wait)
 
