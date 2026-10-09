@@ -156,3 +156,65 @@
 @media (prefers-reduced-motion: reduce) {
   .beat, .sn-row, .chip4, .near-row, .stamp2, .dials *, .needle-m, .sn-bar i, .near-bar i { animation: none !important; opacity: 1 !important; }
 }
+
+/* ------------------------------------------------------------ quantum walkthrough v2: scanner, Bloch spheres, phases */
+.sn { position: relative; }
+.beam { position: absolute; left: -6px; right: -6px; height: 3px; top: 0; border-radius: 3px; opacity: 0; pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--wine) 20%, #fff 50%, var(--wine) 80%, transparent);
+  box-shadow: 0 0 0 1px var(--wine-soft); animation: beam var(--scan-d) linear forwards; animation-delay: var(--scan-t); }
+@keyframes beam { 0% { top: 0; opacity: 1; } 96% { opacity: 1; } 100% { top: calc(100% - 3px); opacity: 0; } }
+.sn-row { grid-template-columns: 30px 1fr 150px 40px auto; }
+.sn-ico { width: 26px; height: 26px; opacity: .25; animation: ico-on .4s forwards; animation-delay: var(--t); }
+@keyframes ico-on { to { opacity: 1; } }
+.atom { width: 26px; height: 26px; overflow: visible; }
+.atom ellipse { fill: none; stroke: var(--ink-2); stroke-width: 1.4; }
+.atom .nuc { fill: var(--ink); }
+.atom .orbits { transform-origin: 15px 15px; animation: spin 2.8s linear infinite; }
+.sn-row.top .atom ellipse { stroke: var(--wine); }
+.sn-row.top .atom .nuc { fill: var(--wine); }
+.sn-row.top .atom .orbits { animation-duration: .9s; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.anomaly { font: 600 11px var(--mono); color: #fff; background: var(--wine); padding: 2px 8px; border-radius: 99px; white-space: nowrap;
+  opacity: 0; animation: chip-pop .35s cubic-bezier(.2,1.6,.4,1) forwards; animation-delay: var(--t3); }
+.chip4 small { display: block; font: 10px var(--mono); color: var(--ink-3); margin-bottom: 1px; }
+
+.bloch-row { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.bloch { width: 132px; height: auto; overflow: visible; }
+.bloch .sphere { fill: var(--paper); stroke: var(--ink); stroke-width: 1.6; }
+.bloch .equator { fill: none; stroke: var(--ink-3); stroke-width: 1.2; }
+.bloch .equator.back { stroke-dasharray: 3 4; }
+.bloch .axis { stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 2 3; }
+.bloch .ket { fill: var(--ink-2); font: 11px var(--mono); text-anchor: middle; }
+.bloch .vec { stroke: var(--wine); stroke-width: 3; stroke-linecap: round; }
+.bloch .tip { fill: var(--wine); }
+.bloch .nucleus { fill: var(--ink); }
+.bloch .lab { fill: var(--ink-2); font: 10.5px var(--mono); text-anchor: middle; }
+.bloch.done .tip { animation: pulse-tip 1.6s ease-in-out infinite; }
+@keyframes pulse-tip { 50% { r: 6; } }
+.zz-link { width: 34px; height: 2px; border-top: 2px dashed var(--wine); position: relative; align-self: center; margin-top: -26px;
+  opacity: 0; animation: show-in .5s forwards; animation-delay: var(--t); }
+.zz-link span { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font: 600 10px var(--mono); color: var(--wine); }
+.rest-row { display: flex; gap: 2px; flex: none; }
+.rest-row .bloch { width: 64px; }
+.rest-row .bloch .tip { animation: pulse-tip 2s ease-in-out infinite; }
+
+.phase-grid { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px 6px; max-width: 640px; }
+.phase { display: grid; justify-items: center; gap: 2px; opacity: 0; animation: show-in .3s forwards; animation-delay: calc(var(--t0) + var(--t2)); }
+.phase svg { width: 42px; height: 42px; overflow: visible; }
+.phase .dial { fill: var(--paper); stroke: var(--ink-3); stroke-width: 1.3; }
+.phase .glow { fill: none; stroke: var(--wine); stroke-width: 2; opacity: 0; animation: ring .8s ease-out forwards; animation-delay: calc(var(--t0) + var(--t2) + .9s); }
+@keyframes ring { 0% { opacity: .9; r: 15; } 100% { opacity: 0; r: 19; } }
+.phase .hand { transform-origin: 20px 20px; transform: rotate(0deg); animation: twist 1.1s cubic-bezier(.3,1.4,.5,1) forwards;
+  animation-delay: calc(var(--t0) + var(--t2) + .2s); }
+.phase .hand line { stroke: var(--wine); stroke-width: 2.4; stroke-linecap: round; }
+.phase .hand circle { fill: var(--wine); }
+.phase .hub { fill: var(--ink); }
+.phase span { font: 10px var(--mono); color: var(--ink-3); }
+@keyframes twist { from { transform: rotate(0deg); } to { transform: rotate(var(--rot)); } }
+
+.near-row { grid-template-columns: 74px 1fr 140px 38px; }
+.braket { font: 12px var(--mono); color: var(--ink-2); white-space: nowrap; }
+.near-bar i { background: repeating-linear-gradient(90deg, var(--wine) 0 5px, transparent 5px 8px); }
+.near-row.benign .near-bar i { background: repeating-linear-gradient(90deg, var(--sage) 0 5px, transparent 5px 8px); }
+@media (max-width: 860px) { .phase-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } .bloch { width: 100px; } }
+@media (prefers-reduced-motion: reduce) { .beam, .phase, .phase .hand, .atom .orbits, .anomaly, .zz-link { animation: none !important; opacity: 1 !important; } }

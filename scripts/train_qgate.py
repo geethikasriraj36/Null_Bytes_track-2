@@ -12,7 +12,7 @@ from aegis.qgate.detector import QGate
 
 rows = [json.loads(l) for l in Path("data/qgate_train.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
 random.Random(0).shuffle(rows)
-rows = rows[:600]                                    # statevector kernel: 600 rows train in well under a minute
+rows = rows[:1000]                                   # statevector kernel: 1000 rows still train in seconds
 X, y = [r["text"] for r in rows], [int(r["label"]) for r in rows]
 print(f"training on {len(X)} rows, {sum(y)} injections")
 

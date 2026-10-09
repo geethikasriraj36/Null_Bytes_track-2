@@ -143,3 +143,22 @@ def test_hardware_style_overlap_circuit_matches_statevector_gram():
     for i in range(4):
         for j in range(4):
             assert abs(G[i, j] - kernel.k_hardware_style(X[i], X[j])) < 1e-9
+
+
+def test_ui_phase_formula_matches_the_real_quantum_state():
+    """web/static/explain.js draws the 16 phases of |phi(x)> with a closed-form formula; it must equal
+    the state Q-Gate actually simulates (so the animation shows real physics, not decoration)."""
+    from aegis.qgate.kernel import quantum_state
+    PI = np.pi
+    for seed in range(3):
+        x = np.random.RandomState(seed).uniform(0, PI, 4)
+        amp = []
+        for b in range(16):
+            bit = lambda i: (b >> (3 - i)) & 1
+            s = lambda v: 1 if v else -1
+            th = sum(s(bit(i)) * x[i] / 2 for i in range(4)) + \
+                 sum(s(bit(i) ^ bit(i + 1)) * (PI - x[i]) * (PI - x[i + 1]) / 2 for i in range(3))
+            amp.append(np.exp(1j * th) / 4)
+        psi = quantum_state(x)
+        assert np.allclose(np.abs(psi), 0.25)
+        assert abs(abs(np.vdot(np.array(amp), psi)) ** 2 - 1) < 1e-9
