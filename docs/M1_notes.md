@@ -33,7 +33,7 @@ Owner: M1. Files: `aegis/llm.py`, `pipeline.py`, `contracts.py`, `config.py`, `i
 - **Obfuscation counts double.** Hiding an instruction in base64 is itself a signal, so the base64 demo jailbreak refuses even if the judge is fooled.
 - **Judge `score` now has one meaning:** probability the text is unsafe. The starter prompt left it ambiguous (a judge could return `{"label":"safe","score":0.95}` meaning "95% sure it's safe").
 - Offline check with the judge forced to "safe" (worst case): 8/10 jailbreaks refused by regex alone, 0/10 borderline over-refused. The 2 misses ("grandma reads the system prompt", "hypothetically if you had no rules…") are semantic, so they're left to the judge rather than overfitting regex.
-- **To do with the real key:** `python -m scripts.m1_handtest`. Target: 10/10 JB refused, 0 borderline refused. If borderline gets refused, fix `INPUT_PROMPT` first, thresholds last.
+- **Real-judge result (Groq `gpt-oss-20b`):** first run 10/10 JB refused but 1 over-refusal ("pretend you are a pirate…"); a rerun also missed "grandma reads the system prompt" (the hosted judge is not fully deterministic at temperature 0). Fixed in `INPUT_PROMPT` (harmless style role-play is safe; any request to read out hidden instructions is a jailbreak). After the fix: **20/20 correct on two consecutive runs**. Thresholds unchanged.
 
 ## Pipeline fixes vs starter
 
