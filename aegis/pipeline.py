@@ -14,7 +14,7 @@ from aegis.toolsafety.gate import check_call, decide, REGISTRY
 from aegis.tools.sim import execute, TOOLS, TOOL_SPECS
 from aegis.grounding.prompt import SYSTEM, BASELINE_SYSTEM, wrap
 from aegis.output.refusal import REFUSAL, ABSTAIN
-from aegis.output import citation_check
+from aegis.output import citation_check, nli
 from aegis.output.decide import decide as h5_decide
 
 MAX_STEPS = 5
@@ -29,6 +29,19 @@ def detector():
         from aegis.qgate.baseline_rbf import RBFBaseline
         _det[key] = QGate.load() if key == "qgate" else RBFBaseline.load()
     return _det[key]
+
+_nli: dict = {}
+
+def _nli_model():
+    """H3 cross-encoder, loaded once per process (it is slow to load). None if unavailable.
+    Keyed on the loader so tests that patch nli.load_model get their fake."""
+    if _nli.get("loader") is not nli.load_model:
+        try:
+            model = nli.load_model()
+        except Exception:
+            model = None
+        _nli.update(loader=nli.load_model, model=model)
+    return _nli["model"]
 
 def audit(state, event, **kw):
     if CFG["M"]:
@@ -211,8 +224,31 @@ def _check_output(state, text, verdicts):
             final = ABSTAIN
             verdicts.append(Verdict(layer="H5", decision="abstain", score=1))
         else:
-            final, v = h5_decide(citation_check.check(final, state.passages))
-            verdicts.append(v)
+            h2_checked = citation_check.check(final, state.passages)
+            model = _nli_model()
+            h3_checked = None
+            if model is not None:
+                try:
+                    h3_checked = nli.check(h2_checked, state.passages, model=model)
+                except Exception:
+                    h3_checked = None
+            if h3_checked is None:
+                # H3 is a Recommended layer: if its model is missing or errors, fall back to the
+                # deterministic H2 citation check instead of abstaining on every grounded answer.
+                verdicts.append(Verdict(layer="H3", decision="flag", score=0.0, reason="nli_unavailable"))
+                final, v = h5_decide(h2_checked)
+                verdicts.append(v)
+            else:
+                rejected = sum(not item.get("supported", False)
+                               for item in h3_checked)
+                verdicts.append(Verdict(
+                    layer="H3",
+                    decision="prune" if rejected else "pass",
+                    score=rejected / len(h3_checked) if h3_checked else 1.0,
+                    details={"checked": len(h3_checked), "rejected": rejected},
+                ))
+                final, v = h5_decide(h3_checked, require_h3=True)
+                verdicts.append(v)
     return _done(state, final, verdicts)
 
 def _done(state, answer, verdicts, refused=False):
