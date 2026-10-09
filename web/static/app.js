@@ -378,14 +378,22 @@ function thoughtPanel(it) {
       : allOff ? `<span class="mut">○ no protection: nothing was checked</span>`
       : leaked ? "" : `<span class="v-ok">✓ all clear</span>`);
   const secs = (t.total_ms || 0) / 1000;
-  const body = `<table class="layers-t"><thead><tr><th>Layer</th><th>What it checks</th><th>Result</th><th>Why</th></tr></thead><tbody>
-    ${rows.map((r) => `<tr class="st-${r.st}"><td class="ln">${esc(r.name)}</td><td class="lq">${esc(r.q)}</td>
-      <td class="lr"><span class="res res-${r.st}">${ST[r.st][0]} ${ST[r.st][1]}</span></td><td class="lw">${esc(r.why)}</td></tr>`).join("")}
-    </tbody></table>
-    <div class="thought-foot"><span class="mut">${t.llm_calls || 0} model calls${t.llm_tokens ? ` · ${t.llm_tokens} tokens` : ""} · ${(it.verdicts || []).length} checks</span>
+  // the layer table drawn as a quantum circuit: one wire per layer, the result is the gate on that wire
+  const GATE = { caught: "⛔", flag: "⚠", pass: "✓", idle: "·", off: "○" };
+  const body = `<div class="qwave" aria-hidden="true"><svg viewBox="0 0 600 24" preserveAspectRatio="none">
+        <path d="M0 12 C25 2 50 2 75 12 S125 22 150 12 S200 2 225 12 S275 22 300 12 S350 2 375 12 S425 22 450 12 S500 2 525 12 S575 22 600 12"/></svg></div>
+    <div class="qhead"><span>wire</span><span>gate</span><span>measurement</span></div>
+    <div class="qcirc">${rows.map((r, i) => `<div class="qrow st-${r.st}" style="--i:${i}">
+      <div class="qlab"><span class="qket">|${esc(r.name)}⟩</span><span class="qq">${esc(r.q)}</span></div>
+      <div class="qwire"><span class="qline"></span><span class="qgate">${GATE[r.st]}<em>${ST[r.st][1]}</em></span><span class="qline"></span></div>
+      <div class="qwhy">${esc(r.why)}</div></div>`).join("")}</div>
+    <div class="thought-foot"><span class="mut">${t.llm_calls || 0} model calls${t.llm_tokens ? ` · ${t.llm_tokens} tokens` : ""} · ${(it.verdicts || []).length} checks · ${rows.filter((r) => r.st !== "off" && r.st !== "idle").length}/${rows.length} wires measured</span>
       <a href="#" class="more" data-explain="${idx}">further explanation ↗</a></div>`;
-  return `<div class="row nerd-row"><details class="thought"><summary><span class="brain">🧠</span> Thought for ${secs < 0.1 ? "<0.1" : secs.toFixed(1)} s
-    <span class="dot">·</span> ${verdict}<span class="chev">▾</span></summary><div class="thought-body">${body}</div></details></div>`;
+  const atomIco = `<svg class="qatom" viewBox="0 0 30 30" aria-hidden="true"><g><ellipse cx="15" cy="15" rx="13" ry="5"/>
+    <ellipse cx="15" cy="15" rx="13" ry="5" transform="rotate(60 15 15)"/><ellipse cx="15" cy="15" rx="13" ry="5" transform="rotate(-60 15 15)"/></g><circle cx="15" cy="15" r="2.6"/></svg>`;
+  const tone = caught.length || leaked ? "hot" : flagged.length ? "warm" : "";
+  return `<div class="row nerd-row"><details class="thought ${tone}"><summary>${atomIco} Thought for ${secs < 0.1 ? "<0.1" : secs.toFixed(1)} s
+    <span class="dot">·</span> ${verdict}<span class="chev">▾</span></summary><div class="thought-body qpanel">${body}</div></details></div>`;
 }
 
 // ------------------------------------------------------------------ raw trace (shown inside "further explanation")
