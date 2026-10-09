@@ -14,7 +14,7 @@ from aegis.toolsafety.gate import check_call, decide, REGISTRY
 from aegis.tools.sim import execute, TOOLS, TOOL_SPECS
 from aegis.grounding.prompt import SYSTEM, BASELINE_SYSTEM, wrap
 from aegis.output.refusal import REFUSAL, ABSTAIN
-from aegis.output import citation_check
+from aegis.output import citation_check, nli
 from aegis.output.decide import decide as h5_decide
 
 MAX_STEPS = 5
@@ -211,8 +211,30 @@ def _check_output(state, text, verdicts):
             final = ABSTAIN
             verdicts.append(Verdict(layer="H5", decision="abstain", score=1))
         else:
-            final, v = h5_decide(citation_check.check(final, state.passages))
-            verdicts.append(v)
+            h2_checked = citation_check.check(final, state.passages)
+            try:
+                h3_checked = nli.check(h2_checked, state.passages)
+            except Exception:
+                final = ABSTAIN
+                verdicts.append(Verdict(
+                    layer="H3", decision="abstain", score=1.0,
+                    reason="nli_unavailable",
+                ))
+                verdicts.append(Verdict(
+                    layer="H5", decision="abstain", score=1.0,
+                    reason="h3_verification_failed",
+                ))
+            else:
+                rejected = sum(not item.get("supported", False)
+                               for item in h3_checked)
+                verdicts.append(Verdict(
+                    layer="H3",
+                    decision="prune" if rejected else "pass",
+                    score=rejected / len(h3_checked) if h3_checked else 1.0,
+                    details={"checked": len(h3_checked), "rejected": rejected},
+                ))
+                final, v = h5_decide(h3_checked, require_h3=True)
+                verdicts.append(v)
     return _done(state, final, verdicts)
 
 def _done(state, answer, verdicts, refused=False):
