@@ -94,7 +94,16 @@ def chat(messages, tools=None):
     if not best:
         return _msg("NOT_FOUND")
     pid, sent = best
-    return _msg(f"{sent} [{pid}]")
+    sent = sent.rstrip(" .") + "."
+    sent = re.sub(r"^(?:Update|Set|Change)\s+(.+?)\s+to\s+(.+)$", r"\1 is now \2", sent, flags=re.I)   # table action -> fact
+    sent = re.sub(r"(\d[\d,.]*(?:\s*(?:to|-)\s*\d+)?\s*(?:business\s+)?(?:days?|hours?|percent|%|rupees|characters|units)?)",
+                  lambda m: f"**{m[1].strip()}**" if m[1].strip() else m[1], sent, count=1)   # key fact in bold
+    answer = f"{sent[0].upper()}{sent[1:]} [{pid}]"
+    if hidden and hardened:                                   # say what we refused to do, citing where it came from
+        src = next((p for p, t in _passages(tool_text) if hidden[1] in t), None)
+        if src:
+            answer += f"\nHeads-up: this document also told me to email {hidden[1].rstrip('.,)|')}; I ignored it. [{src}]"
+    return _msg(answer)
 
 
 def _decode_views(text: str) -> str:

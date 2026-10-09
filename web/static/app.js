@@ -44,6 +44,7 @@ async function boot() {
   refreshAuditPill();
   wire();
   if (location.hash.includes("nerd")) document.querySelectorAll("details.nerd").forEach((d) => (d.open = true));
+  if (location.hash.includes("comic")) comic();
 }
 
 function wire() {
@@ -56,6 +57,8 @@ function wire() {
   $("#toggleTheme").onclick = () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
   $("#openAudit").onclick = openAudit;
   $("#openResults").onclick = openResults;
+  $("#openComic").onclick = comic;
+  $("#chat").addEventListener("click", (e) => { if (e.target.closest("[data-comic]")) { e.preventDefault(); e.stopPropagation(); comic(); } });
   $("#closeDrawer").onclick = () => ($("#drawer").hidden = true);
   $("#drawer").onclick = (e) => { if (e.target.id === "drawer") $("#drawer").hidden = true; };
   $("#menuBtn").onclick = () => $("#sidebar").classList.toggle("open");
@@ -248,7 +251,7 @@ function approvalCard(it, isLast) {
 }
 
 function answerBubble(it) {
-  let text = esc(it.answer).replace(/\[(p_[0-9a-f]{8})\]/g, (_, id) => `<span class="cite" title="${id}">📄 ${esc(it.sources?.[id] || id)}</span>`);
+  const text = md(it.answer, it.sources);
   const sealed = it.audit && it.audit.valid;
   const ticks = it.audit ? `<span class="ticks ${sealed ? "" : "none"}" title="${sealed ? "sealed in the audit log · head " + esc(it.audit.head) : "audit chain broken!"}">${sealed ? "✓✓" : "✗"}</span>`
     : `<span class="ticks none" title="not logged in this configuration">✓</span>`;
@@ -256,7 +259,24 @@ function answerBubble(it) {
   const cls = it.refused || it.unavailable ? "refused" : "";
   const who = it.refused && judgeDown ? `<div class="who">⚠ Safety check couldn't run, so Aegis refused to be safe (see stats)</div>`
     : it.refused ? `<div class="who">🚫 Not answered</div>` : it.unavailable ? `<div class="who">⚠ Unavailable (see stats for the reason)</div>` : "";
-  return `<div class="row"><div class="bubble ${cls}">${who}<p>${text}</p><div class="meta">${clock(it.ts)} ${ticks}</div></div></div>` + nerdPanel(it);
+  return `<div class="row"><div class="bubble ${cls}">${who}<div class="md">${text}</div><div class="meta">${clock(it.ts)} ${ticks}</div></div></div>` + nerdPanel(it);
+}
+
+/* answers: **bold**, "- " bullets, line breaks, [p_xxxxxxxx] -> source chip, "Heads-up:" lines highlighted */
+function md(raw, sources) {
+  const inline = (l) => esc(l).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
+    .replace(/\[(p_[0-9a-f]{8})\]/g, (_, id) => `<span class="cite" title="${id}">📄 ${esc(sources?.[id] || id)}</span>`);
+  const out = []; let list = [];
+  const flush = () => { if (list.length) { out.push(`<ul>${list.map((x) => `<li>${x}</li>`).join("")}</ul>`); list = []; } };
+  for (const line of String(raw || "").split(/\n+/)) {
+    const l = line.trim(); if (!l) continue;
+    const b = l.match(/^(?:[-•*]|\d+[.)])\s+(.*)$/);
+    if (b) { list.push(inline(b[1])); continue; }
+    flush();
+    out.push(/^heads-up:/i.test(l) ? `<p class="headsup">⚠ ${inline(l)}</p>` : `<p>${inline(l)}</p>`);
+  }
+  flush();
+  return out.join("");
 }
 
 // ------------------------------------------------------------------ stats for nerds
@@ -269,7 +289,7 @@ function nerdPanel(it) {
   const t = it.trace || {}, vs = it.verdicts || [];
   const flags = vs.filter((v) => ["flag", "review", "confirm", "strict", "redact", "prune"].includes(v.decision)).length;
   const blocks = vs.filter((v) => ["block", "refuse", "quarantine", "abstain"].includes(v.decision)).length;
-  const sum = `<summary>stats for nerds · ${vs.length} checks · <span class="${flags ? "warn" : ""}">${flags} flag${flags === 1 ? "" : "s"}</span> ·
+  const sum = `<summary><span class="lbl">📊 stats for nerds</span> · ${vs.length} checks · <span class="${flags ? "warn" : ""}">${flags} flag${flags === 1 ? "" : "s"}</span> ·
     <span class="${blocks ? "bad" : ""}">${blocks} block${blocks === 1 ? "" : "s"}</span> · ${((t.total_ms || 0) / 1000).toFixed(1)} s · ${t.llm_calls || 0} LLM calls${t.llm_tokens ? ` · ${t.llm_tokens} tok` : ""}</summary>`;
   const on = Object.entries(t.flags || {}).filter(([, v]) => v).map(([k]) => k).join(" ") || "none";
   const parts = [`<div class="sec">⓪ setup</div>` + kv([["config", esc(S.chat ? S.chat.config : "")], ["layers on", esc(on)],
@@ -325,7 +345,8 @@ function nerdPanel(it) {
   parts.push(`<div class="sec">${n++}. audit</div>` + kv(it.audit ? [["records", `${t.audit_records} written this turn · ${it.audit.records} in log`],
     ["chain", it.audit.valid ? `${D("pass")} intact · head ${esc(it.audit.head)}…` : `${D("block")} BROKEN: ${esc(it.audit.error)}`]]
     : [["records", `<span class="mut">audit layer off in this config</span>`]]));
-  return `<div class="row nerd-row"><details class="nerd">${sum}<div class="nerd-body">${parts.join("")}</div></details></div>`;
+  return `<div class="row nerd-row"><details class="nerd">${sum}<div class="nerd-body">${parts.join("")}</div></details>
+    <button class="howto" data-comic title="A 5-panel comic explaining each section">how to read this ▶</button></div>`;
 }
 
 // ------------------------------------------------------------------ drawers
@@ -336,7 +357,8 @@ async function refreshAuditPill() {
     $("#auditPill").classList.toggle("bad", !a.valid);
   } catch (_) {}
 }
-function drawer(title, html) { $("#drawerTitle").textContent = title; $("#drawerBody").innerHTML = html; $("#drawer").hidden = false; }
+function drawer(title, html) { $(".drawer-card").classList.remove("wide"); $("#drawerTitle").textContent = title; $("#drawerBody").innerHTML = html; $("#drawer").hidden = false; }
+function comic() { window.openComic(); $(".drawer-card").classList.add("wide"); }
 
 async function openAudit() {
   const a = await api("/api/audit?limit=80");

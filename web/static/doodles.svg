@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="440" height="440" viewBox="0 0 440 440"
+     fill="none" stroke="#000" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+  <!-- hand-drawn ink doodles, used as a faint watermark (mask). Slightly wobbly on purpose. -->
+  <!-- shield with tick -->
+  <path d="M40 22 C48 27 55 28 63 27 C64 46 57 60 40 68 C24 60 17 46 18 27 C26 28 33 27 40 22 Z"/>
+  <path d="M30 45 L37 52 L51 37"/>
+  <!-- padlock -->
+  <path d="M152 52 C151 38 171 37 171 51"/>
+  <path d="M145 53 C153 52 170 52 178 54 L177 78 C168 80 154 80 146 78 Z"/>
+  <circle cx="161" cy="64" r="3"/><path d="M161 67 L161 72"/>
+  <!-- envelope with little wings -->
+  <path d="M282 34 L338 33 L339 70 L283 72 Z"/>
+  <path d="M283 35 L310 55 L338 34"/>
+  <path d="M276 46 C268 40 262 44 266 50 M346 46 C354 40 360 44 356 50"/>
+  <!-- key -->
+  <circle cx="44" cy="170" r="11"/><circle cx="44" cy="170" r="3.5"/>
+  <path d="M55 170 C70 171 85 169 99 170 M88 170 L89 179 M96 170 L97 177"/>
+  <!-- magnifier over a squiggle -->
+  <circle cx="190" cy="160" r="17"/><path d="M202 173 L218 190"/>
+  <path d="M181 160 C185 155 189 165 193 159 C196 155 199 162 201 160"/>
+  <!-- document with scribbles -->
+  <path d="M308 140 L340 139 L352 151 L351 192 L309 193 Z"/>
+  <path d="M340 139 L340 151 L352 151"/>
+  <path d="M316 160 C325 158 333 162 343 159 M316 170 C324 172 334 168 343 170 M316 180 C322 178 328 182 333 180"/>
+  <!-- qubit / atom: three orbits and a nucleus -->
+  <ellipse cx="66" cy="300" rx="30" ry="11"/>
+  <ellipse cx="66" cy="300" rx="30" ry="11" transform="rotate(60 66 300)"/>
+  <ellipse cx="66" cy="300" rx="30" ry="11" transform="rotate(-60 66 300)"/>
+  <circle cx="66" cy="300" r="3.5" fill="#000"/>
+  <!-- chain links -->
+  <rect x="172" y="290" width="30" height="16" rx="8" transform="rotate(-12 187 298)"/>
+  <rect x="195" y="296" width="30" height="16" rx="8" transform="rotate(-12 210 304)"/>
+  <rect x="218" y="302" width="30" height="16" rx="8" transform="rotate(-12 233 310)"/>
+  <!-- coffee cup with steam -->
+  <path d="M318 296 L350 296 C349 315 344 324 334 325 C324 324 319 315 318 296 Z"/>
+  <path d="M350 302 C358 301 360 312 349 314"/>
+  <path d="M312 330 C325 333 343 333 356 330"/>
+  <path d="M327 287 C323 281 331 278 327 271 M338 287 C334 281 342 278 338 271"/>
+  <!-- paw print (the sniffer dog) -->
+  <ellipse cx="140" cy="392" rx="9" ry="7"/>
+  <circle cx="128" cy="380" r="3.5"/><circle cx="136" cy="375" r="3.5"/><circle cx="145" cy="375" r="3.5"/><circle cx="153" cy="380" r="3.5"/>
+  <!-- little stop sign -->
+  <path d="M275 380 L285 370 L299 370 L309 380 L309 394 L299 404 L285 404 L275 394 Z"/>
+  <path d="M284 387 L300 387"/>
+  <!-- sparkles, squiggles, dots -->
+  <path d="M120 112 L120 124 M114 118 L126 118"/>
+  <path d="M390 108 L390 118 M385 113 L395 113"/>
+  <path d="M250 240 C256 234 262 246 268 240 C274 234 280 246 286 240"/>
+  <path d="M20 230 C26 224 32 236 38 230"/>
+  <path d="M400 230 L404 238 L412 240 L404 242 L400 250 L396 242 L388 240 L396 238 Z"/>
+  <circle cx="240" cy="90" r="1.6" fill="#000"/><circle cx="380" cy="400" r="1.6" fill="#000"/>
+  <circle cx="100" cy="230" r="1.6" fill="#000"/><circle cx="410" cy="330" r="1.6" fill="#000"/>
+</svg>

@@ -39,6 +39,15 @@ LOCK = threading.Lock()
 app = FastAPI(title="Aegis")
 
 
+@app.middleware("http")
+async def no_stale_ui(request, call_next):
+    """Always revalidate the UI files, so an edited app.js is never served from a stale browser cache."""
+    resp = await call_next(request)
+    if request.url.path == "/" or request.url.path.startswith("/static/"):
+        resp.headers["Cache-Control"] = "no-cache"
+    return resp
+
+
 class NewChat(BaseModel):
     config: str = "7_full"
 

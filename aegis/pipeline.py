@@ -335,6 +335,7 @@ def _check_output(state, text, verdicts):
             verdicts.append(Verdict(layer="H5", decision="abstain", score=1))
             out["h5"] = {"decision": "abstain", "reason": "model said NOT_FOUND"}
         else:
+            checked_text = final
             h2_checked = citation_check.check(final, state.passages)
             out["h2"] = [{"sentence": c["sentence"][:160], "ids": c["ids"], "supported": c["supported"],
                           "missing": c.get("missing", [])} for c in h2_checked]
@@ -367,6 +368,8 @@ def _check_output(state, text, verdicts):
                 final, v = h5_decide(h3_checked, require_h3=True)
                 verdicts.append(v)
                 out["h5"] = v.model_dump()
+            if v.decision == "pass":
+                final = checked_text      # every sentence supported: keep the answer's own formatting
     return done(final)
 
 def _done(state, answer, verdicts, refused=False):
